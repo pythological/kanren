@@ -1,13 +1,9 @@
 import itertools as it
 from functools import partial
-from .util import (dicthash, interleave, take, multihash, unique, evalt)
+from .util import dicthash, interleave, take, multihash, unique, evalt
 from toolz import groupby, map
 
-from unification import reify, unify, var  # noqa
-
-#########
-# Goals #
-#########
+from unification import reify, unify
 
 
 def fail(s):
@@ -15,13 +11,14 @@ def fail(s):
 
 
 def success(s):
-    return iter((s, ))
+    return iter((s,))
 
 
 def eq(u, v):
-    """ Goal such that u == v
+    """Construct a goal stating that its arguments must unify.
 
-    See also:
+    See Also
+    --------
         unify
     """
 
@@ -33,34 +30,30 @@ def eq(u, v):
     return goal_eq
 
 
-################################
-# Logical combination of goals #
-################################
-
-
 def lall(*goals):
-    """ Logical all with goal reordering to avoid EarlyGoalErrors
+    """Construct a logical all with goal reordering to avoid EarlyGoalErrors.
 
-    See also:
+    See Also
+    --------
         EarlyGoalError
         earlyorder
 
-    >>> from kanren import lall, membero
+    >>> from kanren import lall, membero, var
     >>> x = var('x')
     >>> run(0, x, lall(membero(x, (1,2,3)), membero(x, (2,3,4))))
     (2, 3)
     """
-    return (lallgreedy, ) + tuple(earlyorder(*goals))
+    return (lallgreedy,) + tuple(earlyorder(*goals))
 
 
 def lallgreedy(*goals):
-    """ Logical all that greedily evaluates each goals in the order provided.
+    """Construct a logical all that greedily evaluates each goals in the order provided.
 
     Note that this may raise EarlyGoalError when the ordering of the
     goals is incorrect. It is faster than lall, but should be used
     with care.
 
-    >>> from kanren import eq, run, membero
+    >>> from kanren import eq, run, membero, var
     >>> x, y = var('x'), var('y')
     >>> run(0, x, lallgreedy((eq, y, set([1]))), (membero, x, y))
     (1,)
@@ -77,17 +70,19 @@ def lallgreedy(*goals):
     def allgoal(s):
         g = goaleval(reify(goals[0], s))
         return unique(
-            interleave(goaleval(reify(
-                (lallgreedy, ) + tuple(goals[1:]), ss))(ss) for ss in g(s)),
-            key=dicthash)
+            interleave(
+                goaleval(reify((lallgreedy,) + tuple(goals[1:]), ss))(ss) for ss in g(s)
+            ),
+            key=dicthash,
+        )
 
     return allgoal
 
 
 def lallfirst(*goals):
-    """ Logical all - Run goals one at a time
+    """Construct a logical all that runs goals one at a time.
 
-    >>> from kanren import membero
+    >>> from kanren import membero, var
     >>> x = var('x')
     >>> g = lallfirst(membero(x, (1,2,3)), membero(x, (2,3,4)))
     >>> tuple(g({}))
@@ -106,12 +101,14 @@ def lallfirst(*goals):
                 goal = goaleval(reify(g, s))
             except EarlyGoalError:
                 continue
-            other_goals = tuple(goals[:i] + goals[i + 1:])
+            other_goals = tuple(goals[:i] + goals[i + 1 :])
             return unique(
                 interleave(
-                    goaleval(reify((lallfirst, ) + other_goals, ss))(ss)
-                    for ss in goal(s)),
-                key=dicthash)
+                    goaleval(reify((lallfirst,) + other_goals, ss))(ss)
+                    for ss in goal(s)
+                ),
+                key=dicthash,
+            )
         else:
             raise EarlyGoalError()
 
@@ -119,9 +116,9 @@ def lallfirst(*goals):
 
 
 def lany(*goals):
-    """ Logical any
+    """Construct a logical any goal.
 
-    >>> from kanren import lany, membero
+    >>> from kanren import lany, membero, var
     >>> x = var('x')
     >>> g = lany(membero(x, (1,2,3)), membero(x, (2,3,4)))
     >>> tuple(g({}))
@@ -133,7 +130,7 @@ def lany(*goals):
 
 
 def earlysafe(goal):
-    """ Call goal be evaluated without raising an EarlyGoalError """
+    """Check if a goal can be evaluated without raising an EarlyGoalError."""
     try:
         goaleval(goal)
         return True
@@ -142,12 +139,13 @@ def earlysafe(goal):
 
 
 def earlyorder(*goals):
-    """ Reorder goals to avoid EarlyGoalErrors
+    """Reorder goals to avoid EarlyGoalErrors.
 
     All goals are evaluated.  Those that raise EarlyGoalErrors are placed at
     the end in a lall
 
-    See also:
+    See Also
+    --------
         EarlyGoalError
     """
     if not goals:
@@ -161,27 +159,27 @@ def earlyorder(*goals):
     elif not bad:
         return tuple(good)
     else:
-        return tuple(good) + ((lall, ) + tuple(bad), )
+        return tuple(good) + ((lall,) + tuple(bad),)
 
 
 def conde(*goalseqs):
-    """ Logical cond
+    """Construct a logical cond goal.
 
     Goal constructor to provides logical AND and OR
 
     conde((A, B, C), (D, E)) means (A and B and C) or (D and E)
     Equivalent to the (A, B, C); (D, E) syntax in Prolog.
 
-    See Also:
+    See Also
+    --------
         lall - logical all
         lany - logical any
     """
-    return (lany, ) + tuple((lall, ) + tuple(gs) for gs in goalseqs)
+    return (lany,) + tuple((lall,) + tuple(gs) for gs in goalseqs)
 
 
 def lanyseq(goals):
-    """ Logical any with possibly infinite number of goals
-    """
+    """Construct a logical any with a possibly infinite number of goals."""
 
     def anygoal(s):
         anygoal.goals, local_goals = it.tee(anygoal.goals)
@@ -194,10 +192,8 @@ def lanyseq(goals):
                     pass
 
         return unique(
-            interleave(
-                f(local_goals),
-                pass_exceptions=[EarlyGoalError]),
-            key=dicthash)
+            interleave(f(local_goals), pass_exceptions=[EarlyGoalError]), key=dicthash
+        )
 
     anygoal.goals = goals
 
@@ -205,48 +201,41 @@ def lanyseq(goals):
 
 
 def condeseq(goalseqs):
-    """
-    Like conde but supports generic (possibly infinite) iterator of goals
-    """
-    return (lanyseq, ((lall, ) + tuple(gs) for gs in goalseqs))
+    """Construct a goal like conde, but support generic, possibly infinite iterators of goals."""
+    return (lanyseq, ((lall,) + tuple(gs) for gs in goalseqs))
 
 
 def everyg(predicate, coll):
-    """
-    Asserts that predicate applies to all elements of coll.
-    """
-    return (lall, ) + tuple((predicate, x) for x in coll)
-
-
-########################
-# User level execution #
-########################
+    """Assert that a predicate applies to all elements of a collection."""
+    return (lall,) + tuple((predicate, x) for x in coll)
 
 
 def run(n, x, *goals):
-    """ Run a logic program.  Obtain n solutions to satisfy goals.
-
-    n     - number of desired solutions.  See ``take``
-            0 for all
-            None for a lazy sequence
-    x     - Output variable
-    goals - a sequence of goals.  All must be true
+    """Run a logic program and obtain n solutions that satisfy the given goals.
 
     >>> from kanren import run, var, eq
     >>> x = var()
     >>> run(1, x, eq(x, 1))
     (1,)
+
+    Parameters
+    ----------
+    n: int
+        The number of desired solutions (see `take`). `n=0` returns a tuple
+        with all results and `n=None` returns a lazy sequence of all results.
+    x: object
+        The form to reify and output.  Usually contains logic variables used in
+        the given goals.
+    goals: Callables
+        A sequence of goals that must be true in logical conjunction
+        (i.e. `lall`).
     """
     results = map(partial(reify, x), goaleval(lall(*goals))({}))
     return take(n, unique(results, key=multihash))
 
-###################
-# Goal Evaluation #
-###################
-
 
 class EarlyGoalError(Exception):
-    """ A Goal has been constructed prematurely
+    """An exception indicating that a goal has been constructed prematurely.
 
     Consider the following case
 
@@ -266,15 +255,15 @@ class EarlyGoalError(Exception):
     In this case coll is first unified to ``(1, 2, 3)`` then x iterates over
     all elements of coll, 1, then 2, then 3.
 
-    See Also:
+    See Also
+    --------
         lall
         earlyorder
     """
 
 
 def find_fixed_point(f, arg):
-    """
-    Repeatedly calls f until a fixed point is reached.
+    """Repeatedly calls f until a fixed point is reached.
 
     This may not terminate, but should if you apply some eventually-idempotent
     simplification operation like evalt.
@@ -287,11 +276,10 @@ def find_fixed_point(f, arg):
 
 
 def goaleval(goal):
-    """ Expand and then evaluate a goal
+    """Expand and then evaluate a goal.
 
-    Idempotent
-
-    See also:
+    See Also
+    --------
        goalexpand
     """
     if callable(goal):  # goal is already a function like eq(x, 1)

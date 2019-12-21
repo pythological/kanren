@@ -15,7 +15,7 @@ def test_relation():
     fact(parent, "Abe", "Homer")
     fact(parent, "Jackie", "Marge")
 
-    x = var('x')
+    x = var("x")
     assert set(run(5, x, parent("Homer", x))) == set(("Bart", "Lisa"))
     assert set(run(5, x, parent(x, "Bart"))) == set(("Homer", "Marge"))
 
@@ -25,8 +25,8 @@ def test_relation():
 
     assert set(run(5, x, grandparent(x, "Bart"))) == set(("Abe", "Jackie"))
 
-    foo = Relation('foo')
-    assert 'foo' in str(foo)
+    foo = Relation("foo")
+    assert "foo" in str(foo)
 
 
 def test_fact():
@@ -55,7 +55,7 @@ def test_unify_variable_with_itself_should_unify():
     fact(valido, 1, 0)
     fact(valido, 1, 1)
     x = var()
-    assert run(0, x, valido(x, x)) == (1, )
+    assert run(0, x, valido(x, x)) == (1,)
 
 
 def test_unify_tuple():
@@ -69,4 +69,4 @@ def test_unify_tuple():
     y = var()
     assert set(run(0, x, valido((x, y)))) == set([0, 1])
     assert set(run(0, (x, y), valido((x, y)))) == set([(0, 1), (1, 0), (1, 1)])
-    assert run(0, x, valido((x, x))) == (1, )
+    assert run(0, x, valido((x, x))) == (1,)

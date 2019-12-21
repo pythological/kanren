@@ -7,15 +7,15 @@ from kanren.dispatch import dispatch
 
 
 def test_arguments():
-    assert arguments(('add', 1, 2, 3)) == (1, 2, 3)
+    assert arguments(("add", 1, 2, 3)) == (1, 2, 3)
 
 
 def test_operator():
-    assert operator(('add', 1, 2, 3)) == 'add'
+    assert operator(("add", 1, 2, 3)) == "add"
 
 
 def test_term():
-    assert term('add', (1, 2, 3)) == ('add', 1, 2, 3)
+    assert term("add", (1, 2, 3)) == ("add", 1, 2, 3)
 
 
 class Op(object):
@@ -49,11 +49,11 @@ def term(op, args):
 
 
 def test_unifiable_with_term():
-    add = Op('add')
+    add = Op("add")
     t = MyTerm(add, (1, 2))
     assert arguments(t) == (1, 2)
     assert operator(t) == add
     assert term(operator(t), arguments(t)) == t
 
-    x = var('x')
+    x = var("x")
     assert unify(MyTerm(add, (1, x)), MyTerm(add, (1, 2)), {}) == {x: 2}

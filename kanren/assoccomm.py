@@ -1,4 +1,4 @@
-""" Associative and Commutative unification
+"""Functions for associative and commutative unification.
 
 This module provides goals for associative and commutative unification.  It
 accomplishes this through naively trying all possibilities.  This was built to
@@ -30,25 +30,34 @@ be used in the computer algebra systems SymPy and Theano.
 """
 
 from unification.utils import transitive_get as walk
-from unification import isvar
+from unification import isvar, var
 
 
 from . import core
-from .core import (unify, conde, var, eq, fail, lallgreedy, EarlyGoalError,
-                   condeseq, goaleval)
+from .core import (
+    unify,
+    conde,
+    eq,
+    fail,
+    lallgreedy,
+    EarlyGoalError,
+    condeseq,
+    goaleval,
+)
 from .goals import permuteq
 from .facts import Relation
 from .util import groupsizes, index
 from .term import term, arguments, operator
 
-associative = Relation('associative')
-commutative = Relation('commutative')
+associative = Relation("associative")
+commutative = Relation("commutative")
 
 
 def assocunify(u, v, s, eq=core.eq, n=None):
-    """ Associative Unification
+    """Perform associative unification.
 
-    See Also:
+    See Also
+    --------
         eq_assoccomm
     """
     uop, uargs = op_args(u)
@@ -57,7 +66,7 @@ def assocunify(u, v, s, eq=core.eq, n=None):
     if not uop and not vop:
         res = unify(u, v, s)
         if res is not False:
-            return (res, )  # TODO: iterate through all possibilities
+            return (res,)  # TODO: iterate through all possibilities
 
     if uop and vop:
         s = unify(uop, vop, s)
@@ -85,14 +94,14 @@ def assocunify(u, v, s, eq=core.eq, n=None):
 
 
 def assocsized(op, tail, n):
-    """ All associative combinations of x in n groups """
+    """Produce all associative combinations of x in n groups."""
     gsizess = groupsizes(len(tail), n)
     partitions = (groupsizes_to_partition(*gsizes) for gsizes in gsizess)
     return (makeops(op, partition(tail, part)) for part in partitions)
 
 
 def makeops(op, lists):
-    """ Construct operations from an op and parition lists
+    """Construct operations from an op and parition lists.
 
     >>> from kanren.assoccomm import makeops
     >>> makeops('add', [(1, 2), (3, 4, 5)])
@@ -102,7 +111,7 @@ def makeops(op, lists):
 
 
 def partition(tup, part):
-    """ Partition a tuple
+    """Partition a tuple.
 
     >>> from kanren.assoccomm import partition
     >>> partition("abcde", [[0,1], [4,3,2]])
@@ -112,7 +121,8 @@ def partition(tup, part):
 
 
 def groupsizes_to_partition(*gsizes):
-    """
+    """Create a list of ranges from their sizes.
+
     >>> from kanren.assoccomm import groupsizes_to_partition
     >>> groupsizes_to_partition(2, 3)
     [[0, 1], [2, 3, 4]]
@@ -129,7 +139,7 @@ def groupsizes_to_partition(*gsizes):
 
 
 def eq_assoc(u, v, eq=core.eq, n=None):
-    """ Goal for associative equality
+    """Create a goal for associative equality.
 
     >>> from kanren import run, var, fact
     >>> from kanren.assoccomm import eq_assoc as eq
@@ -144,22 +154,26 @@ def eq_assoc(u, v, eq=core.eq, n=None):
     uop, _ = op_args(u)
     vop, _ = op_args(v)
     if uop and vop:
-        return conde([(core.eq, u, v)], [(eq, uop, vop), (associative, uop),
-                                         lambda s: assocunify(u, v, s, eq, n)])
+        return conde(
+            [(core.eq, u, v)],
+            [(eq, uop, vop), (associative, uop), lambda s: assocunify(u, v, s, eq, n)],
+        )
 
     if uop or vop:
 
         if vop:
             uop, vop = vop, uop
             v, u = u, v
-        return conde([(core.eq, u, v)], [(associative, uop),
-                                         lambda s: assocunify(u, v, s, eq, n)])
+        return conde(
+            [(core.eq, u, v)],
+            [(associative, uop), lambda s: assocunify(u, v, s, eq, n)],
+        )
 
     return (core.eq, u, v)
 
 
 def eq_comm(u, v, eq=None):
-    """ Goal for commutative equality
+    """Create a goal for commutative equality.
 
     >>> from kanren import run, var, fact
     >>> from kanren.assoccomm import eq_comm as eq
@@ -183,15 +197,17 @@ def eq_comm(u, v, eq=None):
     if vop and not uop:
         uop, uargs = vop, vargs
         v, u = u, v
-    return (conde, ((core.eq, u, v), ),
-            ((commutative, uop), (buildo, uop, vtail, v),
-             (permuteq, uargs, vtail, eq)))
+    return (
+        conde,
+        ((core.eq, u, v),),
+        ((commutative, uop), (buildo, uop, vtail, v), (permuteq, uargs, vtail, eq)),
+    )
 
 
 def buildo(op, args, obj):
-    """ obj is composed of op on args
+    """Construct a goal that relates an object to its op and args.
 
-    Example: in add(1,2,3) ``add`` is the op and (1,2,3) are the args
+    For example, in `add(1,2,3)`, `add` is the op and `(1,2,3)` are the args.
 
     Checks op_regsitry for functions to define op/arg relationships
     """
@@ -215,7 +231,7 @@ def build(op, args):
 
 
 def op_args(x):
-    """ Break apart x into an operation and tuple of args """
+    """Break apart x into an operation and tuple of args."""
     if isvar(x):
         return None, None
     try:
@@ -225,7 +241,7 @@ def op_args(x):
 
 
 def eq_assoccomm(u, v):
-    """ Associative/Commutative eq
+    """Construct a goal for associative and commutative eq.
 
     Works like logic.core.eq but supports associative/commutative expr trees
 
@@ -256,9 +272,9 @@ def eq_assoccomm(u, v):
         return fail
     if uop and vop and uop != vop:
         return fail
-    if uop and not (uop, ) in associative.facts:
+    if uop and not (uop,) in associative.facts:
         return (eq, u, v)
-    if vop and not (vop, ) in associative.facts:
+    if vop and not (vop,) in associative.facts:
         return (eq, u, v)
 
     if uop and vop:
@@ -270,5 +286,8 @@ def eq_assoccomm(u, v):
         u, v = v, u
     w = var()
     # TODO: Is greedy correct?
-    return (lallgreedy, (eq_assoc, u, w, eq_assoccomm, n),
-            (eq_comm, v, w, eq_assoccomm))
+    return (
+        lallgreedy,
+        (eq_assoc, u, w, eq_assoccomm, n),
+        (eq_comm, v, w, eq_assoccomm),
+    )

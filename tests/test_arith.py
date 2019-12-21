@@ -3,8 +3,8 @@ from unification import var
 from kanren import run, membero
 from kanren.arith import lt, gt, lte, gte, add, sub, mul, mod, div
 
-x = var('x')
-y = var('y')
+x = var("x")
+y = var("y")
 
 
 def results(g):
@@ -58,7 +58,7 @@ def test_mul():
     assert results(mul(2, x, 6)) == [{x: 3}]
     assert results(mul(x, 3, 6)) == [{x: 2}]
 
-    assert mul.__name__ == 'mul'
+    assert mul.__name__ == "mul"
 
 
 def test_mod():
@@ -73,7 +73,15 @@ def test_div():
 
 def test_complex():
     numbers = tuple(range(10))
-    results = set(run(0, x, (sub, y, x, 1), (membero, y, numbers), (
-        mod, y, 2, 0), (membero, x, numbers)))
+    results = set(
+        run(
+            0,
+            x,
+            (sub, y, x, 1),
+            (membero, y, numbers),
+            (mod, y, 2, 0),
+            (membero, x, numbers),
+        )
+    )
     expected = set((1, 3, 5, 7))
     assert results == expected

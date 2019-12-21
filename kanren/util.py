@@ -70,7 +70,7 @@ def take(n, seq):
 
 
 def evalt(t):
-    """ Evaluate tuple if unevaluated
+    """Evaluate a tuple if unevaluated.
 
     >>> from kanren.util import evalt
     >>> add = lambda x, y: x + y
@@ -91,7 +91,7 @@ def intersection(*seqs):
 
 
 def groupsizes(total, len):
-    """ Groups of length len that add up to total
+    """Construct groups of length len that add up to total.
 
     >>> from kanren.util import groupsizes
     >>> tuple(groupsizes(4, 2))
@@ -106,7 +106,7 @@ def groupsizes(total, len):
 
 
 def pprint(g):  # pragma: no cover
-    """ Pretty print a tree of goals """
+    """Pretty print a tree of goals."""
     if callable(g) and hasattr(g, "__name__"):
         return g.__name__
     if isinstance(g, type):
@@ -117,5 +117,5 @@ def pprint(g):  # pragma: no cover
 
 
 def index(tup, ind):
-    """ Fancy indexing with tuples """
+    """Fancy indexing with tuples."""
     return tuple(tup[i] for i in ind)
