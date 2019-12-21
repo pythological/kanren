@@ -50,7 +50,7 @@ def test_conso():
 def test_nullo_itero():
     assert isvar(run(0, y, nullo([]))[0])
     assert isvar(run(0, y, nullo(None))[0])
-    assert run(0, y, nullo(y))[0] is None
+    assert run(0, y, nullo(y))[0] == []
     assert run(0, y, (conso, var(), y, [1]), nullo(y))[0] == []
     assert run(0, y, (conso, var(), y, (1,)), nullo(y))[0] == ()
 

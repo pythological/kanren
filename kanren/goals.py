@@ -42,13 +42,13 @@ def conso(h, t, l):
 def nullo(l):
     """A relation asserting that a term is a "Lisp-like" null.
 
-    For un-unified logic variables, it unifies with `None`.
+    For un-unified logic variables, it unifies with an empty list.
     """
     def _nullo(s):
-        _s = reify(l, s)
-        if isvar(_s):
-            yield unify(_s, None, s)
-        elif isinstance(_s, ConsNull):
+        l_rf = reify(l, s)
+        if isvar(l_rf):
+            yield unify(l_rf, [], s)
+        elif isinstance(l_rf, ConsNull):
             yield s
 
     return _nullo
