@@ -1,4 +1,4 @@
 cons
 toolz
 multipledispatch
-unification
+logical-unification

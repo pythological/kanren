@@ -1,0 +1,7 @@
+pydocstyle>=3.0.0
+pytest>=5.0.0
+pytest-cov>=2.6.1
+pytest-html>=1.20.0
+pylint>=2.3.1
+black>=19.3b0; platform.python_implementation!='PyPy'
+diff-cover

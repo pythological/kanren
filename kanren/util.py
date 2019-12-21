@@ -26,7 +26,7 @@ def multihash(x):
             return hash(frozenset(map(multihash, x.items())))
         if type(x) is slice:
             return hash((x.start, x.stop, x.step))
-        raise TypeError('Hashing not covered for ' + str(x))
+        raise TypeError("Hashing not covered for " + str(x))
 
 
 def unique(seq, key=lambda x: x):
@@ -56,7 +56,7 @@ def interleave(seqs, pass_exceptions=()):
             try:
                 yield next(itr)
                 newiters.append(itr)
-            except (StopIteration, ) + tuple(pass_exceptions):
+            except (StopIteration,) + tuple(pass_exceptions):
                 pass
         iters = newiters
 
@@ -98,21 +98,21 @@ def groupsizes(total, len):
     ((1, 3), (2, 2), (3, 1))
     """
     if len == 1:
-        yield (total, )
+        yield (total,)
     else:
         for i in range(1, total - len + 1 + 1):
             for perm in groupsizes(total - i, len - 1):
-                yield (i, ) + perm
+                yield (i,) + perm
 
 
-def pprint(g):
+def pprint(g):  # pragma: no cover
     """ Pretty print a tree of goals """
-    if callable(g) and hasattr(g, '__name__'):
+    if callable(g) and hasattr(g, "__name__"):
         return g.__name__
-    if isinstance(g, type):  # pragma: no cover
+    if isinstance(g, type):
         return g.__name__
     if isinstance(g, tuple):
-        return "(" + ', '.join(map(pprint, g)) + ")"
+        return "(" + ", ".join(map(pprint, g)) + ")"
     return str(g)
 
 

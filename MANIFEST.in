@@ -1,8 +1,0 @@
-recursive-include kanren *.py
-recursive-include doc *.md
-
-include setup.py
-include requirements.txt
-include README.md
-include LICENSE.txt
-include MANIFEST.in
