@@ -1,13 +1,16 @@
-import collections
 import operator
-from itertools import permutations
+import collections
 
+from itertools import permutations
+from collections.abc import Sequence
+
+from cons import cons
+from cons.core import ConsNull
 from unification import isvar, var, reify, unify
 
 from .core import (eq, EarlyGoalError, conde, condeseq, lany, lallgreedy, lall,
                    fail, success)
 from .util import unique
-from .cons import cons, is_null
 
 
 def heado(head, coll):
@@ -17,7 +20,7 @@ def heado(head, coll):
         tailo
         conso
     """
-    return (eq, cons(head, var()), coll)
+    return eq(cons(head, var()), coll)
 
 
 def tailo(tail, coll):
@@ -27,27 +30,25 @@ def tailo(tail, coll):
         heado
         conso
     """
-    return (eq, cons(var(), tail), coll)
+    return eq(cons(var(), tail), coll)
 
 
 def conso(h, t, l):
     """ cons h + t == l
     """
-    return (eq, cons(h, t), l)
+    return eq(cons(h, t), l)
 
 
 def nullo(l):
     """A relation asserting that a term is a "Lisp-like" null.
 
-    For un-unified logic variables, it unifies with `None`.
-
-    See `is_null`.
+    For un-unified logic variables, it unifies with an empty list.
     """
     def _nullo(s):
-        _s = reify(l, s)
-        if isvar(_s):
-            yield unify(_s, None, s)
-        elif is_null(_s):
+        l_rf = reify(l, s)
+        if isvar(l_rf):
+            yield unify(l_rf, [], s)
+        elif isinstance(l_rf, ConsNull):
             yield s
 
     return _nullo
@@ -80,7 +81,7 @@ def permuteq(a, b, eq2=eq):
     >>> run(0, x, permuteq((2, 1, x), (2, 1, 2)))
     (2,)
     """
-    if isinstance(a, tuple) and isinstance(b, tuple):
+    if isinstance(a, Sequence) and isinstance(b, Sequence):
         if len(a) != len(b):
             return fail
         elif collections.Counter(a) == collections.Counter(b):
@@ -96,21 +97,24 @@ def permuteq(a, b, eq2=eq):
                     c.remove(x)
                 except ValueError:
                     pass
-            c, d = tuple(c), tuple(d)
+
             if len(c) == 1:
                 return (eq2, c[0], d[0])
             return condeseq(
                 ((eq2, x, d[0]), (permuteq, c[0:i] + c[i + 1:], d[1:], eq2))
                 for i, x in enumerate(c)
             )
+    elif not (isinstance(a, Sequence) or isinstance(b, Sequence)):
+        raise ValueError(
+            'Neither a nor b is a Sequence: {}, {}'.format(type(a), type(b)))
 
     if isvar(a) and isvar(b):
         raise EarlyGoalError()
 
     if isvar(a) or isvar(b):
-        if isinstance(b, tuple):
+        if isinstance(b, Sequence):
             c, d = a, b
-        elif isinstance(a, tuple):
+        elif isinstance(a, Sequence):
             c, d = b, a
 
         return (condeseq, ([eq(c, perm)]

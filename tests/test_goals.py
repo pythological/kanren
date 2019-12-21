@@ -1,5 +1,7 @@
 from __future__ import absolute_import
 
+import pytest
+
 from unification import var, isvar
 
 from kanren.goals import (tailo, heado, appendo, seteq, conso, typo,
@@ -48,7 +50,7 @@ def test_conso():
 def test_nullo_itero():
     assert isvar(run(0, y, nullo([]))[0])
     assert isvar(run(0, y, nullo(None))[0])
-    assert run(0, y, nullo(y))[0] is None
+    assert run(0, y, nullo(y))[0] == []
     assert run(0, y, (conso, var(), y, [1]), nullo(y))[0] == []
     assert run(0, y, (conso, var(), y, (1,)), nullo(y))[0] == ()
 
@@ -99,12 +101,20 @@ def test_seteq():
 
 def test_permuteq():
     assert results(permuteq((1, 2), (2, 1)))
+    assert results(permuteq([1, 2], [2, 1]))
     assert results(permuteq((1, 2, 2), (2, 1, 2)))
+
+    with pytest.raises(ValueError):
+        permuteq(set((1, 2, 2)), set((2, 1, 2)))
+
     assert not results(permuteq((1, 2), (2, 1, 2)))
     assert not results(permuteq((1, 2, 3), (2, 1, 2)))
     assert not results(permuteq((1, 2, 1), (2, 1, 2)))
+    assert not results(permuteq([1, 2, 1], (2, 1, 2)))
 
     assert set(run(0, x, permuteq(x, (1, 2, 2)))) == set(((1, 2, 2), (2, 1, 2),
+                                                          (2, 2, 1)))
+    assert set(run(0, x, permuteq(x, [1, 2, 2]))) == set(((1, 2, 2), (2, 1, 2),
                                                           (2, 2, 1)))
 
 
