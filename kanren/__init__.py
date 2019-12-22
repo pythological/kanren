@@ -10,3 +10,8 @@ from .facts import Relation, fact, facts
 from .term import arguments, operator, term, unifiable_with_term
 
 __version__ = "0.2.3"
+
+from ._version import get_versions
+
+__version__ = get_versions()["version"]
+del get_versions

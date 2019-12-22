@@ -1,0 +1,2 @@
+include versioneer.py
+include kanren/_version.py

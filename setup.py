@@ -1,11 +1,15 @@
+#!/usr/bin/env python
+import versioneer
+
 from os.path import exists
 from setuptools import setup
 
 setup(
     name="miniKanren",
-    version="0.3.0",
+    version=versioneer.get_version(),
+    cmdclass=versioneer.get_cmdclass(),
     description="Relational programming in Python",
-    url="http://github.com/pymc-devs/kanren",
+    url="http://github.com/pythological/kanren",
     maintainer="Brandon T. Willard",
     maintainer_email="brandonwillard+kanren@gmail.com",
     license="BSD",
