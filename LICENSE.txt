@@ -1,3 +1,4 @@
+Copyright (c) 2019 Brandon T. Willard
 Copyright (c) 2012 Matthew Rocklin
 
 All rights reserved.
