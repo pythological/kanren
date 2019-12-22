@@ -116,18 +116,18 @@ We can express the grandfather relationship separately.  In this example we use 
 
 ## Extending `kanren` to other Types
 
-`kanren` uses [Multiple Dispatch](http://github.com/mrocklin/multipledispatch/) and the [`logical-unification`` library](https://github.com/brandonwillard/unification) to support pattern matching on user defined types.  Types which can be unified can be used for logic programming.  See the [project examples](https://github.com/brandonwillard/unification#examples) for how to extend the collection of unifiable types to your use case.
+`kanren` uses [Multiple Dispatch](http://github.com/mrocklin/multipledispatch/) and the [`logical-unification`` library](https://github.com/pythological/unification) to support pattern matching on user defined types.  Types which can be unified can be used for logic programming.  See the [project examples](https://github.com/pythological/unification#examples) for how to extend the collection of unifiable types to your use case.
 
 ## Install
 
 With `pip` or `easy_install`:
 ```bash
-pip install kanren
+pip install miniKanren
 ```
 From source:
 ```bash
 git clone git@github.com:pymc-devs/kanren.git
-cd logpy
+cd kanren
 python setup.py install
 ```
 
@@ -142,7 +142,7 @@ tox
 It is pure Python and requires no dependencies beyond the standard
 library, [`toolz`](http://github.com/pytoolz/toolz/),
 [`multipledispatch`](http://github.com/mrocklin/multipledispatch/), and
-[`logical-unification`](http://github.com/brandonwillard/unification/).
+[`logical-unification`](http://github.com/pythological/unification/).
 
 It is, in short, a light weight dependency.
 
