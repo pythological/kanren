@@ -1,83 +1,57 @@
-kanren
-=====
+# `kanren`
 
-[![](https://travis-ci.org/logpy/logpy.png)](https://travis-ci.org/logpy/logpy)
+[![Build Status](https://travis-ci.org/pythological/kanren.svg?branch=master)](https://travis-ci.org/pythological/kanren) [![Coverage Status](https://coveralls.io/repos/github/pythological/kanren/badge.svg?branch=master)](https://coveralls.io/github/pythological/kanren?branch=master) [![PyPI](https://img.shields.io/pypi/v/miniKanren)](https://pypi.org/project/miniKanren/)
 
-Logic Programming in Python
+Logic/relational programming in Python with [miniKanren](http://minikanren.org/).
 
-Examples
---------
+## Motivation
 
-kanren enables the expression of relations and the search for values which satisfy them.  The following code is the "Hello, world!" of logic programming.  It asks for `1` number, `x`, such that `x == 5`
+Logic programming is a general programming paradigm.  This implementation however came about specifically to serve as an algorithmic core for Computer Algebra Systems in Python and for the automated generation and optimization of numeric software.  Domain specific languages, code generation, and compilers have recently been a hot topic in the Scientific Python community.  `kanren` aims to be a low-level core for these projects.
 
-~~~~~~~~~~~Python
->>> from kanren import run, eq, membero, var, conde
+## Examples
+
+`kanren` enables one to express sophisticated relations&mdash;in the form of *goals*&mdash;and generate values that satisfy the relations.  The following code is the "Hello, world!" of logic programming; it asks for values of the *logic variable* `x` such that `x == 5`:
+
+```python
+>>> from kanren import run, eq, membero, var, lall
 >>> x = var()
 >>> run(1, x, eq(x, 5))
 (5,)
-~~~~~~~~~~~
+```
 
-Multiple variables and multiple goals can be used simultaneously.  The
-following code asks for a number x such that `x == z` and `z == 3`
+Multiple logic variables and goals can be used simultaneously.  The following code asks for one list containing the values of `x` and `z` such that `x == z` **and** `z == 3`:
 
-~~~~~~~~~~~Python
+```python
 >>> z = var()
->>> run(1, x, eq(x, z),
-              eq(z, 3))
-(3,)
-~~~~~~~~~~~
+>>> run(1, [x, z], eq(x, z),
+                   eq(z, 3))
+([3, 4],)
+```
 
-kanren uses [unification](http://en.wikipedia.org/wiki/Unification_%28computer_science%29), an advanced form of pattern matching, to match within expression trees.
-The following code asks for a number, x, such that `(1, 2) == (1, x)` holds.
+`kanren` uses [unification](http://en.wikipedia.org/wiki/Unification_%28computer_science%29) to match forms within expression trees.  The following code asks for values of `x` such that `(1, 2) == (1, x)`:
 
-~~~~~~~~~~~Python
+```python
 >>> run(1, x, eq((1, 2), (1, x)))
 (2,)
-~~~~~~~~~~~
+```
 
-The above examples use `eq`, a *goal constructor* to state that two expressions
-are equal.  Other goal constructors exist such as `membero(item, coll)` which
-states that `item` is a member of `coll`, a collection.
+The above examples use `eq`: a *goal constructor* that creates a goal for unification between two objects.  Other goal constructors, such as `membero(item, coll)`, express more sophisticated relations and are often constructed from simpler ones like `eq`.  More specifically, `membero` states that `item` is a member of the collection `coll`.
 
-The following example uses `membero` twice to ask for 2 values of x,
-such that x is a member of `(1, 2, 3)` and that x is a member of `(2, 3, 4)`.
+The following example uses `membero` to ask for *all* values of `x`, such that `x` is a member of `(1, 2, 3)` **and** `x` is a member of `(2, 3, 4)`.
 
-~~~~~~~~~~~Python
->>> run(2, x, membero(x, (1, 2, 3)),  # x is a member of (1, 2, 3)
+```python
+>>> run(0, x, membero(x, (1, 2, 3)),  # x is a member of (1, 2, 3)
               membero(x, (2, 3, 4)))  # x is a member of (2, 3, 4)
 (2, 3)
-~~~~~~~~~~~
+```
 
-### Logic Variables
-
-As in the above examples, `z = var()` creates a logic variable. You may also, optionally, pass a token name for a variable to aid in debugging:
-
-~~~~~~~~~~~Python
->>> z = var('test')
->>> z
-~test
-~~~~~~~~~~~
-
-Lastly, you may also use `vars()` with an integer parameter to create multiple logic variables at once:
-
-~~~~~~~~~~~Python
->>> a, b, c = vars(3)
->>> a
-~_1
->>> b
-~_2
->>> c
-~_3
-~~~~~~~~~~~
+The examples above made implicit use of the goal constructors `lall` and `lany`, which represent goal *conjunction* and *disjunction*, respectively.  Many useful relations can be expressed with `lall`, `lany`, and `eq` alone, but in `kanren` it's also easy to leverage the host language and explicitly create any relation expressible in Python.
 
 ### Representing Knowledge
 
-kanren stores data as facts that state relationships between terms.
+`kanren` stores data as facts that state relationships between terms.  The following code creates a parent relationship and uses it to state facts about who is a parent of whom within the Simpsons family:
 
-The following code creates a parent relationship and uses it to state
-facts about who is a parent of whom within the Simpsons family.
-
-~~~~~~~~~~~Python
+```python
 >>> from kanren import Relation, facts
 >>> parent = Relation()
 >>> facts(parent, ("Homer", "Bart"),
@@ -89,88 +63,61 @@ facts about who is a parent of whom within the Simpsons family.
 
 >>> run(2, x, parent("Homer", x))
 ('Lisa', 'Bart')
-~~~~~~~~~~~~
+```
 
-We can use intermediate variables for more complex queries.  Who is Bart's grandfather?
+We can use intermediate variables for more complex queries.  For instance, who is Bart's grandfather?
 
-~~~~~~~~~~~Python
->>> y = var()
->>> run(1, x, parent(x, y),
-              parent(y, 'Bart'))
+```python
+>>> grandparent_lv, parent_lv = var(), var()
+>>> run(1, grandparent_lv, parent(grandparent_lv, parent_lv),
+                           parent(parent_lv, 'Bart'))
 ('Abe',)
-~~~~~~~~~~~~
+```
 
-We can express the grandfather relationship separately.  In this example we use `conde`, a goal constructor for logical *and* and *or*.
-
-~~~~~~~~~~~Python
+We can express the grandfather relationship as a distinct relation by creating a goal constructor:
+```python
 >>> def grandparent(x, z):
 ...     y = var()
-...     return conde((parent(x, y), parent(y, z)))
+...     return lall(parent(x, y), parent(y, z))
 
 >>> run(1, x, grandparent(x, 'Bart'))
 ('Abe,')
-~~~~~~~~~~~~
+```
 
-Data Structures
----------------
+## Data Structures
 
-kanren depends on functions, tuples, dicts, and generators.  There are almost no new data structures/classes in kanren so it should be simple to integrate into preexisting code.
+`kanren` depends on functions, tuples, dicts, and generators.  There are almost no new data structures/classes in `kanren` so it is simple to integrate into preexisting code.
 
+## Extending `kanren`
 
-Extending kanren to other Types
-------------------------------
+`kanren` uses [`multipledispatch`](http://github.com/mrocklin/multipledispatch/) and the [`logical-unification` library](https://github.com/pythological/unification) to support pattern matching on user defined types.  Essentially, types that can be unified can be used with most `kanren` goals.  See the [project examples](https://github.com/pythological/unification#examples) for demonstrations of how the collection of unifiable types can be extended to your use case.
 
-kanren uses [Multiple Dispatch](http://github.com/mrocklin/multipledispatch/) and the [unification library](https://github.com/mrocklin/unification) to support pattern matching on user defined types.  Also see [unification (wikipedia)](http://en.wikipedia.org/wiki/Unification_%28computer_science%29).
-Types which can be unified can be used for logic programming. See the [project examples](https://github.com/mrocklin/unification#examples) for how to extend the collection of unifiable types to your use case.
+## Installation
 
-Install
--------
+Using `pip`:
+```bash
+pip install miniKanren
+```
 
-With `pip` or `easy_install`
+To install from source:
+```bash
+git clone git@github.com:pythological/kanren.git
+cd kanren
+pip install -r requirements.txt
+```
 
-    pip install kanren
+Tests can be run with the provided `Makefile`:
+```bash
+make check
+```
 
-From source
+## About
 
-    git clone git@github.com:logpy/logpy.git
-    cd logpy
-    python setup.py install
+This project is a fork of [`logpy`](https://github.com/logpy/logpy).
 
-Run tests with tox
+## References
 
-    tox
-
-Dependencies
-------------
-
-``kanren`` supports 3.5+.
-It is pure Python and requires no dependencies beyond the standard
-library, [`toolz`](http://github.com/pytoolz/toolz/),
-[`multipledispatch`](http://github.com/mrocklin/multipledispatch/), and
-[`unification`](http://github.com/mrocklin/unification/).
-
-It is, in short, a light weight dependency.
-
-Author
-------
-
-[Matthew Rocklin](http://matthewrocklin.com)
-
-License
--------
-
-New BSD license. See LICENSE.txt
-
-Motivation
-----------
-
-Logic programming is a general programming paradigm.  This implementation however came about specifically to serve as an algorithmic core for Computer Algebra Systems in Python and for the automated generation and optimization of numeric software.  Domain specific languages, code generation, and compilers have recently been a hot topic in the Scientific Python community.  kanren aims to be a low-level core for these projects.
-
-References
-----------
-
-*   [Logic Programming on wikipedia](http://en.wikipedia.org/wiki/Logic_programming)
-*   [miniKanren](http://minikanren.org/), a Scheme library for relational programming on which this library is based.  More information can be found in the
+* [Logic Programming on wikipedia](http://en.wikipedia.org/wiki/Logic_programming)
+* [miniKanren](http://minikanren.org/), a Scheme library for relational programming on which this library is based.  More information can be found in the
 [thesis of William
 Byrd](https://scholarworks.iu.edu/dspace/bitstream/handle/2022/8777/Byrd_indiana_0093A_10344.pdf).
-*   [core.logic](https://github.com/clojure/core.logic) a popular implementation of miniKanren in Clojure.

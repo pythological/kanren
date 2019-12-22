@@ -2,11 +2,11 @@ import operator
 
 from unification import isvar
 
-from .core import (eq, EarlyGoalError, lany)
+from .core import eq, EarlyGoalError, lany
 
 
 def gt(x, y):
-    """ x > y """
+    """Construct a goal stating x > y."""
     if not isvar(x) and not isvar(y):
         return eq(x > y, True)
     else:
@@ -14,7 +14,7 @@ def gt(x, y):
 
 
 def lt(x, y):
-    """ x > y """
+    """Construct a goal stating x > y."""
     if not isvar(x) and not isvar(y):
         return eq(x < y, True)
     else:
@@ -22,7 +22,7 @@ def lt(x, y):
 
 
 def lor(*goalconsts):
-    """ Logical or for goal constructors
+    """Construct a goal representing a logical OR for goal constructors.
 
     >>> from kanren.arith import lor, eq, gt
     >>> gte = lor(eq, gt)  # greater than or equal to is `eq or gt`
@@ -39,7 +39,7 @@ lte = lor(lt, eq)
 
 
 def binop(op, revop=None):
-    """ Transform binary operator into goal
+    """Transform binary operator into goal.
 
     >>> from kanren.arith import binop
     >>> import operator
@@ -73,10 +73,10 @@ mod.__doc__ = """ x % y == z """
 
 
 def sub(x, y, z):
-    """ x - y == z """
+    """Construct a goal stating x - y == z."""
     return add(y, z, x)
 
 
 def div(x, y, z):
-    """ x / y == z """
+    """Construct a goal stating x / y == z."""
     return mul(z, y, x)
