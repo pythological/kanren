@@ -4,8 +4,10 @@ from abc import ABC, abstractmethod
 from collections import UserDict
 from collections.abc import Mapping
 
-from unification import unify, reify, Var
-from unification.core import _reify
+from toolz import groupby
+
+from unification import unify, reify, Var, var
+from unification.core import _reify, isground
 
 from .util import FlexibleSet
 
@@ -236,3 +238,189 @@ def neq(u, v):
             yield S
 
     return neq_goal
+
+
+class PredicateStore(ConstraintStore, ABC):
+    """An abstract store for testing simple predicates."""
+
+    # @abstractmethod
+    # def cterm_type_check(self, lvt):
+    #     """Check the type of the constrained term when it's ground."""
+    #     raise NotImplementedError()
+
+    @abstractmethod
+    def cparam_type_check(self, lvt):
+        """Check the type of the constraint parameter when it's ground."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def constraint_check(self, lv, lvt):
+        """Check the constrained term against the constraint parameters when they're ground.
+
+        I.e. test the constraint.
+        """
+        raise NotImplementedError()
+
+    def post_unify_check(self, lvar_map, lvar=None, value=None, old_state=None):
+
+        for lv_key, constraints in list(self.lvar_constraints.items()):
+
+            lv = reify(lv_key, lvar_map)
+
+            is_lv_ground = isground(lv, lvar_map)
+            # if is_lv_ground and not self.cterm_type_check(lv):
+            #     self.lvar_constraints[lv_key]
+            #     return False
+
+            constraints = reify(tuple(constraints), lvar_map)
+
+            constraint_grps = groupby(lambda x: isground(x, lvar_map), constraints)
+
+            constraints_unground = constraint_grps.get(False, ())
+            constraints_ground = tuple(
+                lvt
+                for lvt in constraint_grps.get(True, ())
+                if self.cparam_type_check(lvt)
+            )
+
+            # There are no unground types and no valid ground types;
+            # this means that we had some invalid type values.
+            # Fail and remove constraint
+            if len(constraints_unground) == 0 and len(constraints_ground) == 0:
+                del self.lvar_constraints[lv_key]
+                return False
+
+            # FIXME TODO: This should be "is ground"
+            if is_lv_ground and len(constraints_unground) == 0:
+                any_satisfied = any(
+                    self.constraint_check(lv, t) for t in constraints_ground
+                )
+
+                del self.lvar_constraints[lv_key]
+
+                # When the instance and all types are ground and none of them
+                # are satisfactory, we're done checking.
+                if not any_satisfied:
+                    return False
+                else:
+                    return True
+
+        # Some types are unground, so we continue checking until they are
+        return True
+
+    def pre_unify_check(self, lvar_map, lvar=None, value=None):
+        return True
+
+
+class TypeStore(PredicateStore):
+    """A constraint store for asserting object types."""
+
+    def __init__(self, lvar_constraints=None):
+        super().__init__("typeo", lvar_constraints)
+
+    # def cterm_type_check(self, lvt):
+    #     return True
+
+    def cparam_type_check(self, x):
+        return isinstance(x, type)
+
+    def constraint_check(self, x, cx):
+        return type(x) == cx
+
+
+def typeo(u, u_type):
+    """Construct a goal specifying the type of a term."""
+
+    def typeo_goal(S):
+        nonlocal u, u_type
+
+        u, u_type = reify((u, u_type), S)
+
+        if not isground(u, S) or not isground(u_type, S):
+
+            if not isinstance(S, ConstrainedState):
+                S = ConstrainedState(S)
+
+            cs = S.constraints.setdefault(TypeStore, TypeStore())
+
+            try:
+                cs.add(u, u_type)
+            except TypeError:
+                # If the instance object can't be hashed, we can simply use a
+                # logic variable to uniquely identify it.
+                u_lv = var()
+                S[u_lv] = u
+                cs.add(u_lv, u_type)
+
+            yield S
+        elif isinstance(u_type, type) and type(u) == u_type:
+            yield S
+
+    return typeo_goal
+
+
+class IsinstanceStore(PredicateStore):
+    """A constraint store for asserting object instance types."""
+
+    def __init__(self, lvar_constraints=None):
+        super().__init__("isinstanceo", lvar_constraints)
+
+    # def cterm_type_check(self, lvt):
+    #     return True
+
+    def cparam_type_check(self, lvt):
+        return isinstance(lvt, type)
+
+    def constraint_check(self, lv, lvt):
+        return isinstance(lv, lvt)
+
+
+def isinstanceo(u, u_type):
+    """Construct a goal specifying that a term is an instance of a type.
+
+    Only a single instance type can be assigned per goal, i.e.
+
+        lany(isinstanceo(var(), list),
+             isinstanceo(var(), tuple))
+
+    and not
+
+        isinstanceo(var(), (list, tuple))
+
+    """
+
+    def isinstanceo_goal(S):
+        nonlocal u, u_type
+
+        u, u_type = reify((u, u_type), S)
+
+        if not isground(u, S) or not isground(u_type, S):
+
+            if not isinstance(S, ConstrainedState):
+                S = ConstrainedState(S)
+
+            cs = S.constraints.setdefault(IsinstanceStore, IsinstanceStore())
+
+            try:
+                cs.add(u, u_type)
+            except TypeError:
+                # If the instance object can't be hashed, we can simply use a
+                # logic variable to uniquely identify it.
+                u_lv = var()
+                S[u_lv] = u
+                cs.add(u_lv, u_type)
+
+            yield S
+
+        # elif isground(u_type, S):
+        #     yield from lany(eq(u_type, u_t) for u_t in type(u).mro())(S)
+        elif (
+            isinstance(u_type, type)
+            # or (
+            #     isinstance(u_type, Iterable)
+            #     and all(isinstance(t, type) for t in u_type)
+            # )
+        ) and isinstance(u, u_type):
+            yield S
+
+    return isinstanceo_goal
