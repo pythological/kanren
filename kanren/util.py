@@ -1,7 +1,97 @@
-import itertools as it
-from collections import Hashable
+from itertools import chain, islice
+from collections.abc import Hashable, MutableSet, Set
 
-from toolz.compatibility import range, map
+
+class FlexibleSet(MutableSet):
+    """A set that uses a list (and costly identity check) for unhashable items."""
+
+    __slots__ = ("set", "list")
+
+    def __init__(self, iterable):
+
+        self.set = set()
+        self.list = []
+
+        for i in iterable:
+            self.add(i)
+
+    def add(self, item):
+        try:
+            self.set.add(item)
+        except TypeError:
+            # TODO: Could try `multihash`.
+            # TODO: Use `bisect` for unhashable but orderable elements
+            if item not in self.list:
+                self.list.append(item)
+
+    def discard(self, item):
+        try:
+            self.remove(item)
+        except KeyError:
+            pass
+
+    def clear(self):
+        self.set.clear()
+        self.list.clear()
+
+    def pop(self):
+        try:
+            return self.set.pop()
+        except (TypeError, KeyError):
+            try:
+                return self.list.pop(-1)
+            except IndexError:
+                raise KeyError()
+
+    def remove(self, item):
+        try:
+            self.set.remove(item)
+        except (TypeError, KeyError):
+            try:
+                self.list.remove(item)
+            except ValueError:
+                raise KeyError()
+
+    def __le__(self, other):
+        raise NotImplementedError()
+
+    def __ge__(self, other):
+        raise NotImplementedError()
+
+    def __ior__(self, item):
+        raise NotImplementedError()
+
+    def __iand__(self, item):
+        raise NotImplementedError()
+
+    def __ixor__(self, item):
+        raise NotImplementedError()
+
+    def __isub__(self, item):
+        raise NotImplementedError()
+
+    def __iter__(self):
+        return chain(self.set, self.list)
+
+    def __contains__(self, value):
+        try:
+            return value in self.set or value in self.list
+        except TypeError:
+            return value in self.list
+
+    def __len__(self):
+        return len(self.set) + len(self.list)
+
+    def __eq__(self, other):
+        if type(self) == type(other):
+            return self.set == other.set and self.list == other.list
+        elif isinstance(other, Set):
+            return len(self.list) == 0 and other.issuperset(self.set)
+
+        return NotImplemented
+
+    def __repr__(self):
+        return f"FlexibleSet([{', '.join(str(s) for s in self)}])"
 
 
 def hashable(x):
@@ -21,9 +111,9 @@ def multihash(x):
         return hash(x)
     except TypeError:
         if isinstance(x, (list, tuple, set, frozenset)):
-            return hash(tuple(map(multihash, x)))
+            return hash(tuple(multihash(i) for i in x))
         if type(x) is dict:
-            return hash(frozenset(map(multihash, x.items())))
+            return hash(frozenset(tuple(multihash(i) for i in x.items())))
         if type(x) is slice:
             return hash((x.start, x.stop, x.step))
         raise TypeError("Hashing not covered for " + str(x))
@@ -66,7 +156,7 @@ def take(n, seq):
         return seq
     if n == 0:
         return tuple(seq)
-    return tuple(it.islice(seq, 0, n))
+    return tuple(islice(seq, 0, n))
 
 
 def evalt(t):

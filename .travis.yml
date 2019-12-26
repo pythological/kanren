@@ -7,6 +7,10 @@ python:
   - "3.8"
   - "pypy3"
 
+env:
+  global:
+    - COVERALLS_PARALLEL=true
+
 install:
   - pip install -r requirements.txt
 
@@ -19,3 +23,6 @@ script:
 
 after_success:
   - coveralls
+
+notifications:
+  webhooks: https://coveralls.io/webhook
