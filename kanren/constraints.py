@@ -25,10 +25,10 @@ class ConstraintStore(ABC):
 
     """
 
-    __slots__ = ("lvar_constraints", "op_str")
+    __slots__ = ("lvar_constraints",)
+    op_str = None
 
-    def __init__(self, op_str, lvar_constraints=None):
-        self.op_str = op_str
+    def __init__(self, lvar_constraints=None):
         # self.lvar_constraints = weakref.WeakKeyDictionary(lvar_constraints)
         self.lvar_constraints = lvar_constraints or dict()
 
@@ -39,7 +39,10 @@ class ConstraintStore(ABC):
 
     @abstractmethod
     def post_unify_check(self, lvar_map, lvar=None, value=None, old_state=None):
-        """Check a key-value pair after they're added to a ConstrainedState."""
+        """Check a key-value pair after they're added to a ConstrainedState.
+
+        XXX: This method may alter the internal constraints, so make a copy!
+        """
         raise NotImplementedError()
 
     def add(self, lvar, lvar_constraint, **kwargs):
@@ -55,6 +58,11 @@ class ConstraintStore(ABC):
             return f"{self.op_str} {self.lvar_constraints[lvar]}"
         else:
             return ""
+
+    def copy(self):
+        return type(self)(
+            lvar_constraints={k: v.copy() for k, v in self.lvar_constraints.items()},
+        )
 
     def __contains__(self, lvar):
         return lvar in self.lvar_constraints
@@ -80,15 +88,34 @@ class ConstrainedState(UserDict):
         self.constraints = dict(constraints or [])
 
     def pre_unify_checks(self, lvar, value):
+        """Check the constraints before unification."""
         return all(
             cstore.pre_unify_check(self.data, lvar, value)
             for cstore in self.constraints.values()
         )
 
     def post_unify_checks(self, lvar_map, lvar, value):
-        return all(
-            cstore.post_unify_check(lvar_map, lvar, value, old_state=self)
-            for cstore in self.constraints.values()
+        """Check constraints and return an updated state and constraints.
+
+        Returns
+        -------
+        A new `ConstrainedState` and `False`.
+
+        """
+        S = self.copy(data=lvar_map)
+        if any(
+            not cstore.post_unify_check(lvar_map, lvar, value, old_state=S)
+            for cstore in S.constraints.values()
+        ):
+            return False
+
+        return S
+
+    def copy(self, data=None):
+        if data is None:
+            data = self.data.copy()
+        return type(self)(
+            data, constraints={k: v.copy() for k, v in self.constraints.items()}
         )
 
     def __eq__(self, other):
@@ -107,8 +134,10 @@ class ConstrainedState(UserDict):
 def unify_ConstrainedState(u, v, S):
     if S.pre_unify_checks(u, v):
         s = unify(u, v, S.data)
-        if s is not False and S.post_unify_checks(s, u, v):
-            return ConstrainedState(s, constraints=S.constraints)
+        if s is not False:
+            S = S.post_unify_checks(s, u, v)
+            if S is not False:
+                return S
 
     return False
 
@@ -165,8 +194,10 @@ _reify.add((Var, ConstrainedState), reify_ConstrainedState)
 class DisequalityStore(ConstraintStore):
     """A disequality constraint (i.e. two things do not unify)."""
 
+    op_str = "neq"
+
     def __init__(self, lvar_constraints=None):
-        super().__init__("=/=", lvar_constraints)
+        super().__init__(lvar_constraints)
 
     def post_unify_check(self, lvar_map, lvar=None, value=None, old_state=None):
 
@@ -209,11 +240,11 @@ def neq(u, v):
     def neq_goal(S):
         nonlocal u, v
 
-        u, v = reify((u, v), S)
+        u_rf, v_rf = reify((u, v), S)
 
         # Get the unground logic variables that would unify the two objects;
         # these are all the logic variables that we can't let unify.
-        s_uv = unify(u, v, {})
+        s_uv = unify(u_rf, v_rf, {})
 
         if s_uv is False:
             # They don't unify and have no unground logic variables, so the
@@ -315,8 +346,10 @@ class PredicateStore(ConstraintStore, ABC):
 class TypeStore(PredicateStore):
     """A constraint store for asserting object types."""
 
+    op_str = "typeo"
+
     def __init__(self, lvar_constraints=None):
-        super().__init__("typeo", lvar_constraints)
+        super().__init__(lvar_constraints)
 
     # def cterm_type_check(self, lvt):
     #     return True
@@ -334,9 +367,9 @@ def typeo(u, u_type):
     def typeo_goal(S):
         nonlocal u, u_type
 
-        u, u_type = reify((u, u_type), S)
+        u_rf, u_type_rf = reify((u, u_type), S)
 
-        if not isground(u, S) or not isground(u_type, S):
+        if not isground(u_rf, S) or not isground(u_type, S):
 
             if not isinstance(S, ConstrainedState):
                 S = ConstrainedState(S)
@@ -344,16 +377,16 @@ def typeo(u, u_type):
             cs = S.constraints.setdefault(TypeStore, TypeStore())
 
             try:
-                cs.add(u, u_type)
+                cs.add(u_rf, u_type_rf)
             except TypeError:
                 # If the instance object can't be hashed, we can simply use a
                 # logic variable to uniquely identify it.
                 u_lv = var()
-                S[u_lv] = u
-                cs.add(u_lv, u_type)
+                S[u_lv] = u_rf
+                cs.add(u_lv, u_type_rf)
 
             yield S
-        elif isinstance(u_type, type) and type(u) == u_type:
+        elif isinstance(u_type_rf, type) and type(u_rf) == u_type_rf:
             yield S
 
     return typeo_goal
@@ -362,8 +395,10 @@ def typeo(u, u_type):
 class IsinstanceStore(PredicateStore):
     """A constraint store for asserting object instance types."""
 
+    op_str = "isinstanceo"
+
     def __init__(self, lvar_constraints=None):
-        super().__init__("isinstanceo", lvar_constraints)
+        super().__init__(lvar_constraints)
 
     # def cterm_type_check(self, lvt):
     #     return True
@@ -392,9 +427,9 @@ def isinstanceo(u, u_type):
     def isinstanceo_goal(S):
         nonlocal u, u_type
 
-        u, u_type = reify((u, u_type), S)
+        u_rf, u_type_rf = reify((u, u_type), S)
 
-        if not isground(u, S) or not isground(u_type, S):
+        if not isground(u_rf, S) or not isground(u_type_rf, S):
 
             if not isinstance(S, ConstrainedState):
                 S = ConstrainedState(S)
@@ -402,25 +437,25 @@ def isinstanceo(u, u_type):
             cs = S.constraints.setdefault(IsinstanceStore, IsinstanceStore())
 
             try:
-                cs.add(u, u_type)
+                cs.add(u_rf, u_type_rf)
             except TypeError:
                 # If the instance object can't be hashed, we can simply use a
                 # logic variable to uniquely identify it.
                 u_lv = var()
-                S[u_lv] = u
-                cs.add(u_lv, u_type)
+                S[u_lv] = u_rf
+                cs.add(u_lv, u_type_rf)
 
             yield S
 
         # elif isground(u_type, S):
         #     yield from lany(eq(u_type, u_t) for u_t in type(u).mro())(S)
         elif (
-            isinstance(u_type, type)
+            isinstance(u_type_rf, type)
             # or (
             #     isinstance(u_type, Iterable)
             #     and all(isinstance(t, type) for t in u_type)
             # )
-        ) and isinstance(u, u_type):
+        ) and isinstance(u_rf, u_type_rf):
             yield S
 
     return isinstanceo_goal
