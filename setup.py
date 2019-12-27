@@ -18,6 +18,7 @@ setup(
         "toolz",
         "cons",
         "multipledispatch",
+        "etuples >= 0.1.1",
         "logical-unification >= 0.3.2",
     ],
     tests_require=["pytest", "sympy"],
