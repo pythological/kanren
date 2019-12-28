@@ -1,3 +1,5 @@
+from pytest import raises
+
 from itertools import permutations
 
 from unification import var, unify
@@ -220,6 +222,9 @@ def test_typeo():
     # Invalid second arg type (i.e. not a type)
     assert run(0, q_lv, typeo(1, 1)) == ()
 
+    with raises(ValueError):
+        run(0, q_lv, typeo(a_lv, str), typeo(a_lv, int))
+
     goal_sets = [
         # Logic variable instance type that's immediately ground in another
         # goal
@@ -256,12 +261,14 @@ def test_typeo():
         # arguments are ground to the value `1`, which violates the second
         # argument type expectations)
         ([typeo(q_lv, b_lv), eq(b_lv, 1), eq(b_lv, q_lv)], ()),
+        # Check a term that's unground by ground enough for this constraint
+        ([typeo(a_lv, tuple), eq([(b_lv,)], a_lv)], ()),
     ]
 
-    for goal, results in goal_sets:
+    for goal, expected in goal_sets:
         for goal_ord in permutations(goal):
             res = run(0, q_lv, *goal_ord)
-            assert res == results
+            assert res == expected
 
 
 def test_instanceo():
@@ -296,7 +303,6 @@ def test_instanceo():
         # ),
         # A non-ground, non-logic variable instance argument that changes type
         # when ground
-        # TODO FIXME: We need to do a proper "is grounded" check for this to work!
         ([isinstanceo(cons(1, q_lv), list), eq(q_lv, [])], ([],)),
         # Logic variable instance argument that's eventually grounded through
         # another logic variable
@@ -323,9 +329,11 @@ def test_instanceo():
         # arguments are ground to the value `1`, which violates the second
         # argument type expectations)
         ([isinstanceo(q_lv, b_lv), eq(b_lv, 1), eq(b_lv, q_lv)], ()),
+        # Check a term that's unground by ground enough for this constraint
+        ([isinstanceo(q_lv, tuple), eq([(b_lv,)], q_lv)], ()),
     ]
 
-    for goal, results in goal_sets:
+    for i, (goal, expected) in enumerate(goal_sets):
         for goal_ord in permutations(goal):
             res = run(0, q_lv, *goal_ord)
-            assert res == results
+            assert res == expected
