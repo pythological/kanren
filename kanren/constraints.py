@@ -6,6 +6,8 @@ from collections.abc import Mapping
 
 from toolz import groupby
 
+from cons.core import ConsPair
+
 from unification import unify, reify, Var, var
 from unification.core import _reify, isground
 
@@ -274,6 +276,10 @@ def neq(u, v):
 class PredicateStore(ConstraintStore, ABC):
     """An abstract store for testing simple predicates."""
 
+    # Require that all constraints be satisfied for a term; otherwise, succeed
+    # if only one is satisfied.
+    require_all_constraints = True
+
     # @abstractmethod
     # def cterm_type_check(self, lvt):
     #     """Check the type of the constrained term when it's ground."""
@@ -292,49 +298,61 @@ class PredicateStore(ConstraintStore, ABC):
         """
         raise NotImplementedError()
 
+    @abstractmethod
+    def constraint_isground(self, lv, lvar_map):
+        """Check whether or not the constrained term is "ground enough" to be checked."""
+        raise NotImplementedError()
+
     def post_unify_check(self, lvar_map, lvar=None, value=None, old_state=None):
 
         for lv_key, constraints in list(self.lvar_constraints.items()):
 
             lv = reify(lv_key, lvar_map)
 
-            is_lv_ground = isground(lv, lvar_map)
+            is_lv_ground = self.constraint_isground(lv, lvar_map) or isground(
+                lv, lvar_map
+            )
+
+            if not is_lv_ground:
+                # This constraint isn't ready to be checked
+                continue
+
             # if is_lv_ground and not self.cterm_type_check(lv):
             #     self.lvar_constraints[lv_key]
             #     return False
 
-            constraints = reify(tuple(constraints), lvar_map)
-
-            constraint_grps = groupby(lambda x: isground(x, lvar_map), constraints)
-
-            constraints_unground = constraint_grps.get(False, ())
-            constraints_ground = tuple(
-                lvt
-                for lvt in constraint_grps.get(True, ())
-                if self.cparam_type_check(lvt)
+            constraint_grps = groupby(
+                lambda x: isground(x, lvar_map), reify(iter(constraints), lvar_map)
             )
 
-            # There are no unground types and no valid ground types;
-            # this means that we had some invalid type values.
-            # Fail and remove constraint
-            if len(constraints_unground) == 0 and len(constraints_ground) == 0:
-                del self.lvar_constraints[lv_key]
+            constraints_unground = constraint_grps.get(False, ())
+            constraints_ground = constraint_grps.get(True, ())
+
+            if len(constraints_ground) > 0 and not all(
+                self.cparam_type_check(c) for c in constraints_ground
+            ):
+                # Some constraint parameters aren't the correct type, so fail.
+                # del self.lvar_constraints[lv_key]
                 return False
 
-            # FIXME TODO: This should be "is ground"
+            assert constraints_unground or constraints_ground
+
             if is_lv_ground and len(constraints_unground) == 0:
-                any_satisfied = any(
+
+                if self.require_all_constraints and any(
+                    not self.constraint_check(lv, t) for t in constraints_ground
+                ):
+                    return False
+                elif not self.require_all_constraints and not any(
                     self.constraint_check(lv, t) for t in constraints_ground
-                )
+                ):
+                    return False
+
+                # The instance and constraint parameters are all ground and the
+                # constraint is satisfied, so, since nothing should change from
+                # here on, we can remove the constraint.
 
                 del self.lvar_constraints[lv_key]
-
-                # When the instance and all types are ground and none of them
-                # are satisfactory, we're done checking.
-                if not any_satisfied:
-                    return False
-                else:
-                    return True
 
         # Some types are unground, so we continue checking until they are
         return True
@@ -346,10 +364,18 @@ class PredicateStore(ConstraintStore, ABC):
 class TypeStore(PredicateStore):
     """A constraint store for asserting object types."""
 
+    require_all_constraints = True
+
     op_str = "typeo"
 
     def __init__(self, lvar_constraints=None):
         super().__init__(lvar_constraints)
+
+    def add(self, lvt, cparams):
+        if lvt in self.lvar_constraints:
+            raise ValueError("Only one type constraint can be applied to a term")
+
+        return super().add(lvt, cparams)
 
     # def cterm_type_check(self, lvt):
     #     return True
@@ -359,6 +385,9 @@ class TypeStore(PredicateStore):
 
     def constraint_check(self, x, cx):
         return type(x) == cx
+
+    def constraint_isground(self, lv, lvar_map):
+        return not (isinstance(lv, Var) or issubclass(type(lv), ConsPair))
 
 
 def typeo(u, u_type):
@@ -385,7 +414,9 @@ def typeo(u, u_type):
                 S[u_lv] = u_rf
                 cs.add(u_lv, u_type_rf)
 
-            yield S
+            if cs.post_unify_check(S.data, u_rf, u_type_rf):
+                yield S
+
         elif isinstance(u_type_rf, type) and type(u_rf) == u_type_rf:
             yield S
 
@@ -396,6 +427,9 @@ class IsinstanceStore(PredicateStore):
     """A constraint store for asserting object instance types."""
 
     op_str = "isinstanceo"
+
+    # Satisfying any one constraint is good enough
+    require_all_constraints = False
 
     def __init__(self, lvar_constraints=None):
         super().__init__(lvar_constraints)
@@ -408,6 +442,9 @@ class IsinstanceStore(PredicateStore):
 
     def constraint_check(self, lv, lvt):
         return isinstance(lv, lvt)
+
+    def constraint_isground(self, lv, lvar_map):
+        return not (isinstance(lv, Var) or issubclass(type(lv), ConsPair))
 
 
 def isinstanceo(u, u_type):
@@ -445,7 +482,8 @@ def isinstanceo(u, u_type):
                 S[u_lv] = u_rf
                 cs.add(u_lv, u_type_rf)
 
-            yield S
+            if cs.post_unify_check(S.data, u_rf, u_type_rf):
+                yield S
 
         # elif isground(u_type, S):
         #     yield from lany(eq(u_type, u_t) for u_t in type(u).mro())(S)
