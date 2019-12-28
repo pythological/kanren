@@ -7,13 +7,14 @@ class FlexibleSet(MutableSet):
 
     __slots__ = ("set", "list")
 
-    def __init__(self, iterable):
+    def __init__(self, iterable=None):
 
         self.set = set()
         self.list = []
 
-        for i in iterable:
-            self.add(i)
+        if iterable is not None:
+            for i in iterable:
+                self.add(i)
 
     def add(self, item):
         try:
@@ -51,6 +52,12 @@ class FlexibleSet(MutableSet):
                 self.list.remove(item)
             except ValueError:
                 raise KeyError()
+
+    def copy(self):
+        res = type(self)()
+        res.set = self.set.copy()
+        res.list = self.list.copy()
+        return res
 
     def __le__(self, other):
         raise NotImplementedError()

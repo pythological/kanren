@@ -5,7 +5,7 @@ from unification.core import _reify
 
 from cons import cons
 
-from kanren import run, eq
+from kanren import run, eq, conde
 from kanren.core import lall, goaleval
 from kanren.constraints import (
     ConstrainedState,
@@ -21,7 +21,7 @@ def lconj(*goals):
     return goaleval(lall(*goals))
 
 
-def test_kanrenstate():
+def test_ConstrainedState():
 
     a_lv, b_lv = var(), var()
 
@@ -54,6 +54,23 @@ def test_kanrenstate():
     assert unify(a_lv, b_lv, ks)
     assert unify(a_lv, b_lv, ks)
 
+    ks = ConstrainedState(
+        {a_lv: 1}, constraints={DisequalityStore: DisequalityStore({b_lv: {1}})}
+    )
+    ks_2 = ks.copy()
+    assert ks == ks_2
+    assert ks is not ks_2
+    assert ks.constraints is not ks_2.constraints
+    assert ks.constraints[DisequalityStore] is not ks_2.constraints[DisequalityStore]
+    assert (
+        ks.constraints[DisequalityStore].lvar_constraints[b_lv]
+        == ks_2.constraints[DisequalityStore].lvar_constraints[b_lv]
+    )
+    assert (
+        ks.constraints[DisequalityStore].lvar_constraints[b_lv]
+        is not ks_2.constraints[DisequalityStore].lvar_constraints[b_lv]
+    )
+
 
 def test_reify():
     var_a = var("a")
@@ -64,14 +81,14 @@ def test_reify():
     de = DisequalityStore({var_a: {1, 2}})
     ks.constraints[DisequalityStore] = de
 
-    assert repr(de) == "ConstraintStore(=/=: {~a: {1, 2}})"
+    assert repr(de) == "ConstraintStore(neq: {~a: {1, 2}})"
     assert de.constraints_str(var()) == ""
 
-    assert repr(ConstrainedVar(var_a, ks)) == "~a: {=/= {1, 2}}"
+    assert repr(ConstrainedVar(var_a, ks)) == "~a: {neq {1, 2}}"
 
     # TODO: Make this work with `reify` when `var('a')` isn't in `ks`.
     assert isinstance(_reify(var_a, ks), ConstrainedVar)
-    assert repr(_reify(var_a, ks)) == "~a: {=/= {1, 2}}"
+    assert repr(_reify(var_a, ks)) == "~a: {neq {1, 2}}"
 
 
 def test_ConstraintStore():
@@ -151,8 +168,27 @@ def test_disequality():
         ([neq(cons(1, a_lv), [1]), eq(a_lv, [])], 0),
         ([neq(cons(1, a_lv), [1]), eq(a_lv, b_lv), eq(b_lv, [])], 0),
         ([neq([1], cons(1, a_lv)), eq(a_lv, b_lv), eq(b_lv, [])], 0),
+        # TODO FIXME: This one won't work due to an ambiguity in `cons`.
+        # (
+        #     [
+        #         neq([1], cons(1, a_lv)),
+        #         eq(a_lv, b_lv),
+        #         # Both make `cons` produce a list
+        #         conde([eq(b_lv, None)], [eq(b_lv, [])]),
+        #     ],
+        #     0,
+        # ),
         ([neq(cons(1, a_lv), [1]), eq(a_lv, b_lv), eq(b_lv, tuple())], 1),
         ([neq([1], cons(1, a_lv)), eq(a_lv, b_lv), eq(b_lv, tuple())], 1),
+        (
+            [
+                neq([1], cons(1, a_lv)),
+                eq(a_lv, b_lv),
+                # The first should fail, the second should succeed
+                conde([eq(b_lv, [])], [eq(b_lv, tuple())]),
+            ],
+            1,
+        ),
         ([neq(a_lv, 1), eq(a_lv, 1)], 0),
         ([neq(a_lv, 1), eq(b_lv, 1), eq(a_lv, b_lv)], 0),
         ([neq(a_lv, 1), eq(b_lv, 1), eq(a_lv, b_lv)], 0),
@@ -198,6 +234,16 @@ def test_typeo():
         ([typeo(cons(1, a_lv), list), eq(a_lv, [])], (q_lv,)),
         # Logic variable instance and type arguments
         ([typeo(q_lv, int), eq(b_lv, 1), eq(b_lv, q_lv)], (1,)),
+        # The same, but with `conde`
+        (
+            [
+                typeo(q_lv, int),
+                # One succeeds, one fails
+                conde([eq(b_lv, 1)], [eq(b_lv, "hi")]),
+                eq(b_lv, q_lv),
+            ],
+            (1,),
+        ),
         # Logic variable instance argument that's eventually grounded to a
         # mismatched instance type through another logic variable
         ([typeo(q_lv, int), eq(b_lv, 1.0), eq(b_lv, q_lv)], ()),
@@ -255,6 +301,16 @@ def test_instanceo():
         # Logic variable instance argument that's eventually grounded through
         # another logic variable
         ([isinstanceo(q_lv, int), eq(b_lv, 1), eq(b_lv, q_lv)], (1,)),
+        # The same, but with `conde`
+        (
+            [
+                isinstanceo(q_lv, int),
+                # One succeeds, one fails
+                conde([eq(b_lv, 1)], [eq(b_lv, "hi")]),
+                eq(b_lv, q_lv),
+            ],
+            (1,),
+        ),
         # Logic variable instance argument that's eventually grounded to a
         # mismatched instance type through another logic variable
         ([isinstanceo(q_lv, int), eq(b_lv, 1.0), eq(b_lv, q_lv)], ()),
