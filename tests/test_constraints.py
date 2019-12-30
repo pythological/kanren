@@ -8,6 +8,7 @@ from unification.core import _reify
 from cons import cons
 
 from kanren import run, eq, conde
+from kanren.goals import membero
 from kanren.core import lall, goaleval
 from kanren.constraints import (
     ConstrainedState,
@@ -221,6 +222,10 @@ def test_typeo():
     assert run(0, q_lv, typeo([], q_lv)) == (q_lv,)
     # Invalid second arg type (i.e. not a type)
     assert run(0, q_lv, typeo(1, 1)) == ()
+    assert run(0, q_lv, membero(q_lv, (1, "cat", 2.2, "hat")), typeo(q_lv, str)) == (
+        "cat",
+        "hat",
+    )
 
     with raises(ValueError):
         run(0, q_lv, typeo(a_lv, str), typeo(a_lv, int))
