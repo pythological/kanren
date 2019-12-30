@@ -191,7 +191,7 @@ def seteq(a, b, eq2=eq):
         return permuteq(a, ts(b), eq2)
 
 
-def goalify(func, name=None):
+def goalify(func, name=None):  # pragma: noqa
     """Convert Python function into kanren goal.
 
     >>> from kanren import run, goalify, var, membero
@@ -208,7 +208,7 @@ def goalify(func, name=None):
     ['int', 'str']
     """
 
-    def funco(inputs, out):
+    def funco(inputs, out):  # pragma: noqa
         if isvar(inputs):
             raise EarlyGoalError()
         else:

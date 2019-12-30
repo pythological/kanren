@@ -1,21 +1,6 @@
-from __future__ import absolute_import
-
-from unification import var, unify
+from unification import var, unify, reify
 
 from kanren.term import term, operator, arguments, unifiable_with_term
-from kanren.dispatch import dispatch
-
-
-def test_arguments():
-    assert arguments(("add", 1, 2, 3)) == (1, 2, 3)
-
-
-def test_operator():
-    assert operator(("add", 1, 2, 3)) == "add"
-
-
-def test_term():
-    assert term("add", (1, 2, 3)) == ("add", 1, 2, 3)
 
 
 class Op(object):
@@ -33,27 +18,31 @@ class MyTerm(object):
         return self.op == other.op and self.arguments == other.arguments
 
 
-@dispatch(MyTerm)
-def arguments(t):
+@arguments.register(MyTerm)
+def arguments_MyTerm(t):
     return t.arguments
 
 
-@dispatch(MyTerm)
-def operator(t):
+@operator.register(MyTerm)
+def operator_MyTerm(t):
     return t.op
 
 
-@dispatch(Op, (list, tuple))
-def term(op, args):
+@term.register(Op, (list, tuple))
+def term_Op(op, args):
     return MyTerm(op, args)
 
 
 def test_unifiable_with_term():
     add = Op("add")
     t = MyTerm(add, (1, 2))
+
     assert arguments(t) == (1, 2)
     assert operator(t) == add
     assert term(operator(t), arguments(t)) == t
 
-    x = var("x")
-    assert unify(MyTerm(add, (1, x)), MyTerm(add, (1, 2)), {}) == {x: 2}
+    x = var()
+    s = unify(MyTerm(add, (1, x)), MyTerm(add, (1, 2)), {})
+
+    assert s == {x: 2}
+    assert reify(MyTerm(add, (1, x)), s) == MyTerm(add, (1, 2))
