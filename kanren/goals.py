@@ -1,12 +1,11 @@
-import operator
 import collections
 
 from itertools import permutations
 from collections.abc import Sequence
 
 from cons import cons
-from cons.core import ConsNull
-from unification import isvar, var, reify, unify
+from cons.core import ConsNull, ConsPair
+from unification import isvar, reify, var
 
 from .core import (
     eq,
@@ -18,6 +17,7 @@ from .core import (
     lall,
     fail,
     success,
+    goaleval,
 )
 from .util import unique
 
@@ -49,23 +49,53 @@ def conso(h, t, l):
     return eq(cons(h, t), l)
 
 
-def nullo(l):
-    """Create a goal asserting that a term is a "Lisp-like" null.
+def nullo(*args, default_ConsNull=list):
+    """Create a goal asserting that one or more terms are a/the same `ConsNull` type.
 
-    For un-unified logic variables, it unifies with an empty list.
+    `ConsNull` types return proper Python collections when used as a CDR value
+    in a CONS (e.g. `cons(1, []) == [1]`).
+
+    This goal doesn't require that all args be unifiable; only that they have
+    the same `ConsNull` type.  Unlike the classic `lall(eq(x, []), eq(y, x))`
+    `conde`-branch idiom used when recursively walking a single sequence via
+    `conso`, this allows us to perform the same essential function while
+    walking distinct lists that do not necessarily terminate on the same
+    iteration.
+
+    Unground logic variables will be set to the value of the `default_ConsNull` kwarg.
     """
 
-    def _nullo(s):
-        l_rf = reify(l, s)
-        if isvar(l_rf):
-            yield unify(l_rf, [], s)
-        elif isinstance(l_rf, ConsNull):
-            yield s
+    def eqnullo_goal(s):
 
-    return _nullo
+        nonlocal args, default_ConsNull
+
+        args_rf = reify(args, s)
+
+        arg_null_types = set(
+            # Get an empty instance of the type
+            type(a)
+            for a in args_rf
+            # `ConsPair` and `ConsNull` types that are not literally `ConsPair`s
+            if isinstance(a, (ConsPair, ConsNull)) and not issubclass(type(a), ConsPair)
+        )
+
+        try:
+            null_type = arg_null_types.pop()
+        except KeyError:
+            null_type = default_ConsNull
+
+        if len(arg_null_types) > 0 and any(a != null_type for a in arg_null_types):
+            # Mismatching null types: fail.
+            return
+
+        g = lall(*[eq(a, null_type()) for a in args_rf])
+
+        yield from goaleval(g)(s)
+
+    return eqnullo_goal
 
 
-def itero(l):
+def itero(l, default_ConsNull=list):
     """Construct a goal asserting that a term is an iterable type.
 
     This is a generic version of the standard `listo` that accounts for
@@ -73,8 +103,18 @@ def itero(l):
 
     See `nullo`
     """
-    c, d = var(), var()
-    return (conde, [(nullo, l), success], [(conso, c, d, l), (itero, d)])
+
+    def itero_goal(S):
+        nonlocal l
+        l_rf = reify(l, S)
+        c, d = var(), var()
+        g = conde(
+            [nullo(l_rf, default_ConsNull=default_ConsNull)],
+            [conso(c, d, l_rf), itero(d, default_ConsNull=default_ConsNull)],
+        )
+        yield from goaleval(g)(S)
+
+    return itero_goal
 
 
 def permuteq(a, b, eq2=eq):
@@ -190,11 +230,6 @@ def membero(x, coll):
     if not isvar(coll):
         return (lany,) + tuple((eq, x, item) for item in coll)
     raise EarlyGoalError()
-
-
-typo = goalify(type, name="typo")
-isinstanceo = goalify(isinstance, name="isinstanceo")
-not_equalo = goalify(operator.ne, name="not_equalo")
 
 
 def appendo(l, s, ls, base_type=tuple):
