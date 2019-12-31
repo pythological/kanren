@@ -1,16 +1,19 @@
+import pytest
+
 from operator import add, mul
 from functools import partial
 from math import log, exp
 
-import pytest
-
 from unification import var, unify
+
+from etuples.dispatch import rator, rands, apply
+from etuples.core import etuple, ExpressionTuple
+
+from cons import cons
 
 from kanren import run, eq, conde, lall
 from kanren.constraints import isinstanceo
-
-from etuples.core import etuple, ExpressionTuple
-from kanren.graph import reduceo, seq_apply_anyo, graph_applyo
+from kanren.graph import applyo, reduceo, map_anyo, walko
 
 
 class OrderedFunction(object):
@@ -74,11 +77,42 @@ def math_reduceo(in_expr, out_expr):
 
 def full_math_reduceo(a, b):
     """Produce all results for repeated applications of the math-based relation."""
-    return (reduceo, math_reduceo, a, b)
+    return reduceo(math_reduceo, a, b)
 
 
-def fixedp_graph_applyo(r, x, y):
-    return reduceo(partial(graph_applyo, r, preprocess_graph=None), x, y)
+def fixedp_walko(r, x, y):
+    return reduceo(partial(walko, r), x, y)
+
+
+def test_applyo():
+    a_lv, b_lv, c_lv = var(), var(), var()
+
+    assert run(0, c_lv, applyo(add, (1, 2), c_lv)) == (3,)
+    assert run(0, c_lv, applyo(add, etuple(1, 2), c_lv)) == (3,)
+    assert run(0, c_lv, applyo(add, a_lv, c_lv)) == (cons(add, a_lv),)
+
+    for obj in (
+        (1, 2, 3),
+        (add, 1, 2),
+        [1, 2, 3],
+        [add, 1, 2],
+        etuple(1, 2, 3),
+        etuple(add, 1, 2),
+    ):
+        o_rator, o_rands = rator(obj), rands(obj)
+        assert run(0, a_lv, applyo(o_rator, o_rands, a_lv)) == (
+            apply(o_rator, o_rands),
+        )
+        # Just acts like `conso` here
+        assert run(0, a_lv, applyo(o_rator, a_lv, obj)) == (rands(obj),)
+        assert run(0, a_lv, applyo(a_lv, o_rands, obj)) == (rator(obj),)
+
+    # Just acts like `conso` here, too
+    assert run(0, c_lv, applyo(a_lv, b_lv, c_lv)) == (cons(a_lv, b_lv),)
+
+    # with pytest.raises(ConsError):
+    assert run(0, a_lv, applyo(a_lv, b_lv, object())) == ()
+    assert run(0, a_lv, applyo(1, 2, a_lv)) == ()
 
 
 def test_basics():
@@ -113,73 +147,53 @@ def test_reduceo():
     assert res[1] == etuple(log, etuple(exp, etuple(log, etuple(exp, 1))))
 
 
-def test_seq_apply_anyo_types():
+def test_map_anyo_types():
     """Make sure that `applyo` preserves the types between its arguments."""
     q_lv = var()
-    res = run(1, q_lv, seq_apply_anyo(lambda x, y: eq(x, y), [1], q_lv))
+    res = run(1, q_lv, map_anyo(lambda x, y: eq(x, y), [1], q_lv))
     assert res[0] == [1]
-    res = run(1, q_lv, seq_apply_anyo(lambda x, y: eq(x, y), (1,), q_lv))
+    res = run(1, q_lv, map_anyo(lambda x, y: eq(x, y), (1,), q_lv))
     assert res[0] == (1,)
-    res = run(
-        1, q_lv, seq_apply_anyo(lambda x, y: eq(x, y), etuple(1,), q_lv, skip_op=False)
-    )
-    assert res[0] == etuple(1,)
-    res = run(1, q_lv, seq_apply_anyo(lambda x, y: eq(x, y), q_lv, (1,)))
+    res = run(1, q_lv, map_anyo(lambda x, y: eq(x, y), q_lv, (1,)))
     assert res[0] == (1,)
-    res = run(1, q_lv, seq_apply_anyo(lambda x, y: eq(x, y), q_lv, [1]))
+    res = run(1, q_lv, map_anyo(lambda x, y: eq(x, y), q_lv, [1]))
     assert res[0] == [1]
-    res = run(
-        1, q_lv, seq_apply_anyo(lambda x, y: eq(x, y), q_lv, etuple(1), skip_op=False)
-    )
-    assert res[0] == etuple(1)
-    res = run(1, q_lv, seq_apply_anyo(lambda x, y: eq(x, y), [1, 2], [1, 2]))
+    res = run(1, q_lv, map_anyo(lambda x, y: eq(x, y), [1, 2], [1, 2]))
     assert len(res) == 1
-    res = run(1, q_lv, seq_apply_anyo(lambda x, y: eq(x, y), [1, 2], [1, 3]))
+    res = run(1, q_lv, map_anyo(lambda x, y: eq(x, y), [1, 2], [1, 3]))
     assert len(res) == 0
-    res = run(1, q_lv, seq_apply_anyo(lambda x, y: eq(x, y), [1, 2], (1, 2)))
+    res = run(1, q_lv, map_anyo(lambda x, y: eq(x, y), [1, 2], (1, 2)))
     assert len(res) == 0
-    res = run(
-        0,
-        q_lv,
-        seq_apply_anyo(
-            lambda x, y: eq(y, etuple(mul, 2, x)), etuple(add, 1, 2), q_lv, skip_op=True
-        ),
-    )
-    assert len(res) == 3
-    assert all(r[0] == add for r in res)
 
 
-def test_seq_apply_anyo_misc():
+def test_map_anyo_misc():
     q_lv = var("q")
 
-    assert len(run(0, q_lv, seq_apply_anyo(eq, [1, 2, 3], [1, 2, 3]))) == 1
+    assert len(run(0, q_lv, map_anyo(eq, [1, 2, 3], [1, 2, 3]))) == 1
 
-    assert len(run(0, q_lv, seq_apply_anyo(eq, [1, 2, 3], [1, 3, 3]))) == 0
+    assert len(run(0, q_lv, map_anyo(eq, [1, 2, 3], [1, 3, 3]))) == 0
 
     def one_to_threeo(x, y):
         return conde([eq(x, 1), eq(y, 3)])
 
-    res = run(0, q_lv, seq_apply_anyo(one_to_threeo, [1, 2, 4, 1, 4, 1, 1], q_lv))
+    res = run(0, q_lv, map_anyo(one_to_threeo, [1, 2, 4, 1, 4, 1, 1], q_lv))
 
     assert res[0] == [3, 2, 4, 3, 4, 3, 3]
 
     assert (
-        len(
-            run(4, q_lv, seq_apply_anyo(math_reduceo, [etuple(mul, 2, var("x"))], q_lv))
-        )
-        == 0
+        len(run(4, q_lv, map_anyo(math_reduceo, [etuple(mul, 2, var("x"))], q_lv))) == 0
     )
 
-    test_res = run(4, q_lv, seq_apply_anyo(math_reduceo, [etuple(add, 2, 2), 1], q_lv))
+    test_res = run(4, q_lv, map_anyo(math_reduceo, [etuple(add, 2, 2), 1], q_lv))
     assert test_res == ([etuple(mul, 2, 2), 1],)
 
-    test_res = run(4, q_lv, seq_apply_anyo(math_reduceo, [1, etuple(add, 2, 2)], q_lv))
+    test_res = run(4, q_lv, map_anyo(math_reduceo, [1, etuple(add, 2, 2)], q_lv))
     assert test_res == ([1, etuple(mul, 2, 2)],)
 
-    test_res = run(4, q_lv, seq_apply_anyo(math_reduceo, q_lv, var("z")))
+    test_res = run(4, q_lv, map_anyo(math_reduceo, q_lv, var("z")))
     assert all(isinstance(r, list) for r in test_res)
 
-    test_res = run(4, q_lv, seq_apply_anyo(math_reduceo, q_lv, var("z"), tuple()))
+    test_res = run(4, q_lv, map_anyo(math_reduceo, q_lv, var("z"), tuple))
     assert all(isinstance(r, tuple) for r in test_res)
 
 
@@ -205,10 +219,10 @@ def test_seq_apply_anyo_misc():
         ),
     ],
 )
-def test_seq_apply_anyo(test_input, test_output):
-    """Test `seq_apply_anyo` with fully ground terms (i.e. no logic variables)."""
+def test_map_anyo(test_input, test_output):
+    """Test `map_anyo` with fully ground terms (i.e. no logic variables)."""
     q_lv = var()
-    test_res = run(0, q_lv, (seq_apply_anyo, full_math_reduceo, test_input, q_lv))
+    test_res = run(0, q_lv, map_anyo(full_math_reduceo, test_input, q_lv),)
 
     assert len(test_res) == len(test_output)
 
@@ -226,12 +240,12 @@ def test_seq_apply_anyo(test_input, test_output):
     assert test_res == test_output
 
 
-def test_seq_apply_anyo_reverse():
-    """Test `seq_apply_anyo` in "reverse" (i.e. specify the reduced form and generate the un-reduced form)."""
+def test_map_anyo_reverse():
+    """Test `map_anyo` in "reverse" (i.e. specify the reduced form and generate the un-reduced form)."""
     # Unbounded reverse
     q_lv = var()
     rev_input = [etuple(mul, 2, 1)]
-    test_res = run(4, q_lv, (seq_apply_anyo, math_reduceo, q_lv, rev_input))
+    test_res = run(4, q_lv, (map_anyo, math_reduceo, q_lv, rev_input))
     assert test_res == (
         [etuple(add, 1, 1)],
         [etuple(log, etuple(exp, etuple(mul, 2, 1)))],
@@ -239,42 +253,54 @@ def test_seq_apply_anyo_reverse():
 
     # Guided reverse
     test_res = run(
-        4,
-        q_lv,
-        (seq_apply_anyo, math_reduceo, [etuple(add, q_lv, 1)], [etuple(mul, 2, 1)]),
+        4, q_lv, map_anyo(math_reduceo, [etuple(add, q_lv, 1)], [etuple(mul, 2, 1)]),
     )
 
     assert test_res == (1,)
 
 
-def test_graph_applyo_misc():
-    q_lv = var("q")
+def test_walko_misc():
+    q_lv = var(prefix="q")
+
     expr = etuple(add, etuple(mul, 2, 1), etuple(add, 1, 1))
-    assert len(run(0, q_lv, graph_applyo(eq, expr, expr, preprocess_graph=None))) == 1
+    assert len(run(0, q_lv, walko(eq, expr, expr))) == 1
 
     expr2 = etuple(add, etuple(mul, 2, 1), etuple(add, 2, 1))
-    assert len(run(0, q_lv, graph_applyo(eq, expr, expr2, preprocess_graph=None))) == 0
-
-    assert (
-        len(run(0, q_lv, graph_applyo(eq, etuple(), etuple(), preprocess_graph=None)))
-        == 1
-    )
+    assert len(run(0, q_lv, walko(eq, expr, expr2))) == 0
 
     def one_to_threeo(x, y):
         return conde([eq(x, 1), eq(y, 3)])
 
-    res = run(
-        0,
+    res = run(1, q_lv, walko(one_to_threeo, [1, [1, 2, 4], 2, [[4, 1, 1]], 1], q_lv,),)
+    assert res == ([3, [3, 2, 4], 2, [[4, 3, 3]], 3],)
+
+    assert run(2, q_lv, walko(eq, q_lv, q_lv, null_type=ExpressionTuple)) == (
         q_lv,
-        graph_applyo(
+        etuple(),
+    )
+
+    res = run(
+        1,
+        q_lv,
+        walko(
             one_to_threeo,
-            [1, [1, 2, 4], 2, [[4, 1, 1]], 1],
+            etuple(
+                add,
+                1,
+                etuple(mul, etuple(add, 1, 2), 1),
+                etuple(add, etuple(add, 1, 2), 2),
+            ),
             q_lv,
-            preprocess_graph=None,
+            # Only descend into `add` terms
+            rator_goal=lambda x, y: lall(eq(x, add), eq(y, add)),
         ),
     )
 
-    assert res[0] == [3, [3, 2, 4], 2, [[4, 3, 3]], 3]
+    assert res == (
+        etuple(
+            add, 3, etuple(mul, etuple(add, 1, 2), 1), etuple(add, etuple(add, 3, 2), 2)
+        ),
+    )
 
 
 @pytest.mark.parametrize(
@@ -302,12 +328,12 @@ def test_graph_applyo_misc():
         ),
     ],
 )
-def test_graph_applyo(test_input, test_output):
-    """Test `graph_applyo` with fully ground terms (i.e. no logic variables)."""
+def test_walko(test_input, test_output):
+    """Test `walko` with fully ground terms (i.e. no logic variables)."""
 
     q_lv = var()
     test_res = run(
-        len(test_output), q_lv, fixedp_graph_applyo(full_math_reduceo, test_input, q_lv)
+        len(test_output), q_lv, fixedp_walko(full_math_reduceo, test_input, q_lv)
     )
 
     assert len(test_res) == len(test_output)
@@ -323,11 +349,11 @@ def test_graph_applyo(test_input, test_output):
     assert set(test_res) == set(test_output)
 
 
-def test_graph_applyo_reverse():
-    """Test `graph_applyo` in "reverse" (i.e. specify the reduced form and generate the un-reduced form)."""
+def test_walko_reverse():
+    """Test `walko` in "reverse" (i.e. specify the reduced form and generate the un-reduced form)."""
     q_lv = var("q")
 
-    test_res = run(2, q_lv, fixedp_graph_applyo(math_reduceo, q_lv, 5))
+    test_res = run(2, q_lv, fixedp_walko(math_reduceo, q_lv, 5))
     assert test_res == (
         etuple(log, etuple(exp, 5)),
         etuple(log, etuple(exp, etuple(log, etuple(exp, 5)))),
@@ -335,7 +361,7 @@ def test_graph_applyo_reverse():
     assert all(e.eval_obj == 5.0 for e in test_res)
 
     # Make sure we get some variety in the results
-    test_res = run(2, q_lv, fixedp_graph_applyo(math_reduceo, q_lv, etuple(mul, 2, 5)))
+    test_res = run(2, q_lv, fixedp_walko(math_reduceo, q_lv, etuple(mul, 2, 5)))
     assert test_res == (
         # Expansion of the term's root
         etuple(add, 5, 5),
@@ -349,7 +375,7 @@ def test_graph_applyo_reverse():
     assert all(e.eval_obj == 10.0 for e in test_res)
 
     r_lv = var("r")
-    test_res = run(4, [q_lv, r_lv], fixedp_graph_applyo(math_reduceo, q_lv, r_lv))
+    test_res = run(4, [q_lv, r_lv], fixedp_walko(math_reduceo, q_lv, r_lv))
     expect_res = (
         [etuple(add, 1, 1), etuple(mul, 2, 1)],
         [etuple(log, etuple(exp, etuple(add, 1, 1))), etuple(mul, 2, 1)],

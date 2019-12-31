@@ -1,22 +1,66 @@
 from functools import partial
-from operator import length_hint
 
 from unification import var, isvar
 from unification import reify
 
-from kanren import eq
-from kanren.core import goaleval
-from kanren.goals import conso, fail
+from cons.core import ConsError
 
-from cons.core import ConsPair, ConsNull
-from etuples.core import ExpressionTuple
-from etuples.dispatch import etuplize
+from etuples import apply, rands, rator
 
-from .core import conde, lall
+from .core import eq, conde, lall, goaleval
+from .goals import conso, nullo
 
 
-def seq_apply_anyo(relation, l_in, l_out, null_type=False, skip_op=True):
-    """Apply a relation to at least one pair of corresponding elements in two sequences.
+def applyo(o_rator, o_rands, obj):
+    """Construct a goal that relates an object to the application of its (ope)rator to its (ope)rands.
+
+    In other words, this is the relation `op(*args) == obj`.  It uses the
+    `rator`, `rands`, and `apply` dispatch functions from `etuples`, so
+    implement/override those to get the desired behavior.
+
+    """
+
+    def applyo_goal(S):
+        nonlocal o_rator, o_rands, obj
+
+        o_rator_rf, o_rands_rf, obj_rf = reify((o_rator, o_rands, obj), S)
+
+        if not isvar(obj_rf):
+
+            # We should be able to use this goal with *any* arguments, so
+            # fail when the ground operations fail/err.
+            try:
+                obj_rator, obj_rands = rator(obj_rf), rands(obj_rf)
+            except (ConsError, NotImplementedError):
+                return
+
+            # The object's rator + rands should be the same as the goal's
+            yield from goaleval(
+                lall(eq(o_rator_rf, obj_rator), eq(o_rands_rf, obj_rands))
+            )(S)
+
+        elif isvar(o_rands_rf) or isvar(o_rator_rf):
+            # The object and at least one of the rand, rators is a logic
+            # variable, so let's just assert a `cons` relationship between
+            # them
+            yield from goaleval(conso(o_rator_rf, o_rands_rf, obj_rf))(S)
+        else:
+            # The object is a logic variable, but the rator and rands aren't.
+            # We assert that the object is the application of the rand and
+            # rators.
+            try:
+                obj_applied = apply(o_rator_rf, o_rands_rf)
+            except (ConsError, NotImplementedError):
+                return
+            yield from eq(obj_rf, obj_applied)(S)
+
+    return applyo_goal
+
+
+def map_anyo(relation, l_in, l_out, null_type=list):
+    """Apply a relation to corresponding elements in two sequences and succeed if at least one pair succeeds.
+
+    Empty `l_in` and/or `l_out` will fail--i.e. `relation` must succeed *at least once*.
 
     Parameters
     ----------
@@ -24,17 +68,12 @@ def seq_apply_anyo(relation, l_in, l_out, null_type=False, skip_op=True):
        An object that's a valid cdr for the collection type desired.  If
        `False` (i.e. the default value), the cdr will be inferred from the
        inputs, or defaults to an empty list.
-    skip_op: boolean (optional)
-       When both inputs are `etuple`s and this value is `True`, the relation
-       will not be applied to the operators (i.e. the cars) of the inputs.
     """
 
-    # This is a customized (based on the initial call arguments) goal
-    # constructor
-    def _seq_apply_anyo(relation, l_in, l_out, i_any, null_type, skip_cars=False):
-        def seq_apply_anyo_sub_goal(s):
+    def _map_anyo(relation, l_in, l_out, i_any):
+        def map_anyo_goal(s):
 
-            nonlocal i_any, null_type
+            nonlocal relation, l_in, l_out, i_any, null_type
 
             l_in_rf, l_out_rf = reify((l_in, l_out), s)
 
@@ -46,7 +85,9 @@ def seq_apply_anyo(relation, l_in, l_out, null_type=False, skip_op=True):
             if i_any or (isvar(l_in_rf) and isvar(l_out_rf)):
                 # Consider terminating the sequences when we've had at least
                 # one successful goal or when both sequences are logic variables.
-                conde_branches.append([eq(l_in_rf, null_type), eq(l_in_rf, l_out_rf)])
+                conde_branches.append(
+                    [nullo(l_in_rf, l_out_rf, default_ConsNull=null_type)]
+                )
 
             # Extract the CAR and CDR of each argument sequence; this is how we
             # iterate through elements of the two sequences.
@@ -59,26 +100,23 @@ def seq_apply_anyo(relation, l_in, l_out, null_type=False, skip_op=True):
 
             conde_relation_branches = []
 
-            relation_branch = None
+            relation_branch = [
+                # This case tries the relation and continues on.
+                relation(i_car, o_car),
+                # In this conde clause, we can tell future calls to
+                # `map_anyo` that we've had at least one successful
+                # application of the relation (otherwise, this clause
+                # would fail due to the above goal).
+                _map_anyo(relation, i_cdr, o_cdr, True),
+            ]
 
-            if not skip_cars:
-                relation_branch = [
-                    # This case tries the relation continues on.
-                    relation(i_car, o_car),
-                    # In this conde clause, we can tell future calls to
-                    # seq_apply_anyo that we've had at least one successful
-                    # application of the relation (otherwise, this clause
-                    # would fail due to the above goal).
-                    _seq_apply_anyo(relation, i_cdr, o_cdr, True, null_type),
-                ]
-
-                conde_relation_branches.append(relation_branch)
+            conde_relation_branches.append(relation_branch)
 
             base_branch = [
                 # This is the "base" case; it is used when, for example,
                 # the given relation isn't satisfied.
                 eq(i_car, o_car),
-                _seq_apply_anyo(relation, i_cdr, o_cdr, i_any, null_type),
+                _map_anyo(relation, i_cdr, o_cdr, i_any),
             ]
 
             conde_relation_branches.append(base_branch)
@@ -86,56 +124,12 @@ def seq_apply_anyo(relation, l_in, l_out, null_type=False, skip_op=True):
             cons_parts_branch.append(conde(*conde_relation_branches))
 
             g = conde(*conde_branches)
-            g = goaleval(g)
 
-            yield from g(s)
+            yield from goaleval(g)(s)
 
-        return seq_apply_anyo_sub_goal
+        return map_anyo_goal
 
-    def seq_apply_anyo_init_goal(s):
-
-        nonlocal null_type, skip_op
-
-        # We need the `cons` types to match in the end, which involves
-        # using the same `cons`-null (i.e. terminating `cdr`).
-        if null_type is False:
-            l_out_, l_in_ = reify((l_out, l_in), s)
-
-            out_null_type = False
-            if isinstance(l_out_, (ConsPair, ConsNull)):
-                out_null_type = type(l_out_)()
-
-            in_null_type = False
-            if isinstance(l_in_, (ConsPair, ConsNull)):
-                in_null_type = type(l_in_)()
-
-                if out_null_type is not False and not type(in_null_type) == type(
-                    out_null_type
-                ):
-                    yield from fail(s)
-                    return
-
-            null_type = (
-                out_null_type
-                if out_null_type is not False
-                else in_null_type
-                if in_null_type is not False
-                else []
-            )
-
-        g = _seq_apply_anyo(
-            relation,
-            l_in,
-            l_out,
-            False,
-            null_type,
-            skip_cars=isinstance(null_type, ExpressionTuple) and skip_op,
-        )
-        g = goaleval(g)
-
-        yield from g(s)
-
-    return seq_apply_anyo_init_goal
+    return _map_anyo(relation, l_in, l_out, False)
 
 
 def reduceo(relation, in_term, out_term):
@@ -146,7 +140,7 @@ def reduceo(relation, in_term, out_term):
 
     def reduceo_goal(s):
 
-        nonlocal in_term, out_term
+        nonlocal in_term, out_term, relation
 
         in_term_rf, out_term_rf = reify((in_term, out_term), s)
 
@@ -158,15 +152,15 @@ def reduceo(relation, in_term, out_term):
         is_expanding = isvar(in_term_rf)
 
         # One application of the relation assigned to `term_rdcd`
-        single_apply_g = (relation, in_term, term_rdcd)
+        single_apply_g = relation(in_term_rf, term_rdcd)
 
         # Assign/equate (unify, really) the result of a single application to
         # the "output" term.
-        single_res_g = eq(term_rdcd, out_term)
+        single_res_g = eq(term_rdcd, out_term_rf)
 
         # Recurse into applications of the relation (well, produce a goal that
         # will do that)
-        another_apply_g = reduceo(relation, term_rdcd, out_term)
+        another_apply_g = reduceo(relation, term_rdcd, out_term_rf)
 
         # We want the fixed-point value to show up in the stream output
         # *first*, but that requires some checks.
@@ -179,7 +173,7 @@ def reduceo(relation, in_term, out_term):
             #
             # In other words, there's no fixed-point to produce in this
             # situation.  Instead, for example, we have to produce an infinite
-            # stream of terms that have `out_term` as a fixed point.
+            # stream of terms that have `out_term_rf` as a fixed point.
             # g = conde([single_res_g, single_apply_g],
             #           [another_apply_g, single_apply_g])
             g = lall(conde([single_res_g], [another_apply_g]), single_apply_g)
@@ -194,72 +188,56 @@ def reduceo(relation, in_term, out_term):
     return reduceo_goal
 
 
-def graph_applyo(
-    relation,
-    in_graph,
-    out_graph,
-    preprocess_graph=partial(etuplize, shallow=True, return_bad_args=True),
-):
-    """Apply a relation to a graph and its subgraphs.
+def walko(goal, graph_in, graph_out, rator_goal=None, null_type=False):
+    """Apply a binary relation between all nodes in two graphs.
+
+    When `rator_goal` is used, the graphs are treated as term graphs, and the
+    multi-functions `rator`, `rands`, and `apply` are used to walk the graphs.
+    Otherwise, the graphs must be iterable according to `map_anyo`.
 
     Parameters
     ----------
-    relation: callable
-      A relation to apply on a graph and its subgraphs.
-    in_graph: object
-      The graph for which the left-hand side of a binary relation holds.
-    out_graph: object
-      The graph for which the right-hand side of a binary relation holds.
-    preprocess_graph: callable (optional)
-      A unary function that produces an iterable upon which `seq_apply_anyo`
-      can be applied in order to traverse a graph's subgraphs.  The default
-      function converts the graph to expression-tuple form.
+    goal: callable
+        A goal that is applied to all terms in the graph.
+    graph_in: object
+        The graph for which the left-hand side of a binary relation holds.
+    graph_out: object
+        The graph for which the right-hand side of a binary relation holds.
+    rator_goal: callable (default None)
+        A goal that is applied to the rators of a graph.  When specified,
+        `goal` is only applied to rands and it must succeed along with the
+        rator goal in order to descend into sub-terms.
+    null_type: type
+        The collection type used when it is not fully determined by the graph
+        arguments.
     """
 
-    if preprocess_graph in (False, None):
+    def walko_goal(s):
 
-        def preprocess_graph(x):
-            return x
+        nonlocal goal, rator_goal, graph_in, graph_out, null_type
 
-    def graph_applyo_goal(s):
+        graph_in_rf, graph_out_rf = reify((graph_in, graph_out), s)
 
-        nonlocal in_graph, out_graph
+        rator_in, rands_in, rator_out, rands_out = var(), var(), var(), var()
 
-        in_graph_rf, out_graph_rf = reify((in_graph, out_graph), s)
+        _walko = partial(walko, goal, rator_goal=rator_goal, null_type=null_type)
 
-        _gapply = partial(graph_applyo, relation, preprocess_graph=preprocess_graph)
+        g = conde(
+            [goal(graph_in_rf, graph_out_rf),],
+            [
+                lall(
+                    applyo(rator_in, rands_in, graph_in_rf),
+                    applyo(rator_out, rands_out, graph_out_rf),
+                    rator_goal(rator_in, rator_out),
+                    map_anyo(_walko, rands_in, rands_out, null_type=null_type),
+                )
+                if rator_goal is not None
+                else lall(
+                    map_anyo(_walko, graph_in_rf, graph_out_rf, null_type=null_type)
+                ),
+            ],
+        )
 
-        graph_reduce_gl = (relation, in_graph_rf, out_graph_rf)
+        yield from goaleval(g)(s)
 
-        # We need to get the sub-graphs/children of the input graph/node
-        if not isvar(in_graph_rf):
-            in_subgraphs = preprocess_graph(in_graph_rf)
-            in_subgraphs = None if length_hint(in_subgraphs, 0) == 0 else in_subgraphs
-        else:
-            in_subgraphs = in_graph_rf
-
-        if not isvar(out_graph_rf):
-            out_subgraphs = preprocess_graph(out_graph_rf)
-            out_subgraphs = (
-                None if length_hint(out_subgraphs, 0) == 0 else out_subgraphs
-            )
-        else:
-            out_subgraphs = out_graph_rf
-
-        conde_args = ([graph_reduce_gl],)
-
-        # This goal reduces sub-graphs/children of the graph.
-        if in_subgraphs is not None and out_subgraphs is not None:
-            # We will only include it when there actually are children, or when
-            # we're dealing with a logic variable (e.g. and "generating"
-            # children).
-            subgraphs_reduce_gl = seq_apply_anyo(_gapply, in_subgraphs, out_subgraphs)
-
-            conde_args += ([subgraphs_reduce_gl],)
-
-        g = conde(*conde_args)
-
-        g = goaleval(g)
-        yield from g(s)
-
-    return graph_applyo_goal
+    return walko_goal
