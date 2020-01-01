@@ -18,7 +18,7 @@ from kanren.assoccomm import (
     buildo,
     op_args,
 )
-from kanren.dispatch import dispatch
+from kanren.term import operator, arguments, term
 
 a = "assoc_op"
 c = "comm_op"
@@ -56,22 +56,27 @@ class Operator(object):
 Add = Operator("add")
 Mul = Operator("mul")
 
-add = lambda *args: Node(Add, args)
-mul = lambda *args: Node(Mul, args)
+
+def add(*args):
+    return Node(Add, args)
 
 
-@dispatch(Operator, (tuple, list))
-def term(op, args):
+def mul(*args):
+    return Node(Mul, args)
+
+
+@term.register(Operator, (tuple, list))
+def term_Operator(op, args):
     return Node(op, args)
 
 
-@dispatch(Node)
-def arguments(n):
+@arguments.register(Node)
+def arguments_Node(n):
     return n.args
 
 
-@dispatch(Node)
-def operator(n):
+@operator.register(Node)
+def operator_Node(n):
     return n.op
 
 

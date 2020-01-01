@@ -84,13 +84,33 @@ We can express the grandfather relationship as a distinct relation by creating a
 ('Abe,')
 ```
 
-## Data Structures
+## Constraints
 
-`kanren` depends on functions, tuples, dicts, and generators.  There are almost no new data structures/classes in `kanren` so it is simple to integrate into preexisting code.
+`kanren` provides a fully functional constraint system that allows one to restrict unification and object types:
+
+```python
+>>> from kanren.constraints import neq, isinstanceo
+
+>>> run(0, x,
+...     neq(x, 1),  # Not "equal" to 1
+...     neq(x, 3),  # Not "equal" to 3
+...     membero(x, (1, 2, 3)))
+(2,)
+
+>>> from numbers import Integral
+>>> run(0, x,
+...     isinstanceo(x, Integral),  # `x` must be of type `Integral`
+...     membero(x, (1.1, 2, 3.2, 4)))
+(2, 4)
+```
+
+## Graph Relations
+
+`kanren` comes with support for relational graph operations suitable for basic symbolic algebra operations.  See the examples in [`doc/graphs.md`](doc/graphs.md).
 
 ## Extending `kanren`
 
-`kanren` uses [`multipledispatch`](http://github.com/mrocklin/multipledispatch/) and the [`logical-unification` library](https://github.com/pythological/unification) to support pattern matching on user defined types.  Essentially, types that can be unified can be used with most `kanren` goals.  See the [project examples](https://github.com/pythological/unification#examples) for demonstrations of how the collection of unifiable types can be extended to your use case.
+`kanren` uses [`multipledispatch`](http://github.com/mrocklin/multipledispatch/) and the [`logical-unification` library](https://github.com/pythological/unification) to support pattern matching on user defined types.  Essentially, types that can be unified can be used with most `kanren` goals.  See the [`logical-unification` project's examples](https://github.com/pythological/unification#examples) for demonstrations of how arbitrary types can be made unifiable.
 
 ## Installation
 

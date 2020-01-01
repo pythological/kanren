@@ -10,10 +10,8 @@ from kanren.goals import (
     appendo,
     seteq,
     conso,
-    typo,
     nullo,
     itero,
-    isinstanceo,
     permuteq,
     membero,
 )
@@ -51,6 +49,7 @@ def test_conso():
     assert results(conso(1, (2, 3), x)) == ({x: (1, 2, 3)},)
     assert results(conso(x, y, (1, 2, 3))) == ({x: 1, y: (2, 3)},)
     assert results(conso(x, (2, 3), y)) == ({y: (x, 2, 3)},)
+    assert run(0, x, conso(x, y, z), eq(z, (1, 2, 3))) == (1,)
 
     # Confirm that custom types are preserved.
     class mytuple(tuple):
@@ -61,11 +60,32 @@ def test_conso():
 
 
 def test_nullo_itero():
+
+    q_lv, a_lv = var(), var()
+
+    assert run(0, q_lv, conso(1, q_lv, [1]), nullo(q_lv))
+    assert run(0, q_lv, nullo(q_lv), conso(1, q_lv, [1]))
+
+    assert not run(0, q_lv, nullo(q_lv, [], ()))
+    assert run(0, [a_lv, q_lv], nullo(q_lv, a_lv, default_ConsNull=tuple)) == (
+        [(), ()],
+    )
+    assert run(0, [a_lv, q_lv], nullo(a_lv, [], q_lv)) == ([[], []],)
+
+    assert ([],) == run(0, q_lv, nullo(q_lv, []))
+    assert ([],) == run(0, q_lv, nullo([], q_lv))
+    assert (None,) == run(0, q_lv, nullo(None, q_lv))
+    assert (tuple(),) == run(0, q_lv, nullo(tuple(), q_lv))
+    assert (q_lv,) == run(0, q_lv, nullo(tuple(), tuple()))
+    assert ([],) == run(0, q_lv, nullo(var(), q_lv))
+    assert ([],) == run(0, q_lv, nullo(q_lv, var()))
+    assert ([],) == run(0, q_lv, nullo(q_lv, q_lv))
+
     assert isvar(run(0, y, nullo([]))[0])
     assert isvar(run(0, y, nullo(None))[0])
     assert run(0, y, nullo(y))[0] == []
-    assert run(0, y, (conso, var(), y, [1]), nullo(y))[0] == []
-    assert run(0, y, (conso, var(), y, (1,)), nullo(y))[0] == ()
+    assert run(0, y, conso(var(), y, [1]), nullo(y))[0] == []
+    assert run(0, y, conso(var(), y, (1,)), nullo(y))[0] == ()
 
     assert run(1, y, conso(1, x, y), itero(y))[0] == [1]
     assert run(1, y, conso(1, x, y), conso(2, z, x), itero(y))[0] == [1, 2]
@@ -131,25 +151,6 @@ def test_permuteq():
     assert set(run(0, x, permuteq(x, (1, 2, 2)))) == set(
         ((1, 2, 2), (2, 1, 2), (2, 2, 1))
     )
-
-
-def test_typo():
-    assert results(typo(3, int))
-    assert not results(typo(3.3, int))
-    assert run(0, x, membero(x, (1, "cat", 2.2, "hat")), (typo, x, str)) == (
-        "cat",
-        "hat",
-    )
-
-
-def test_isinstanceo():
-    assert results(isinstanceo((3, int), True))
-    assert not results(isinstanceo((3, float), True))
-    assert results(isinstanceo((3, float), False))
-
-
-def test_conso_early():
-    assert run(0, x, (conso, x, y, z), (eq, z, (1, 2, 3))) == (1,)
 
 
 def test_appendo():
