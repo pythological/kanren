@@ -1,8 +1,8 @@
-from __future__ import absolute_import
-
 import pytest
 
-from unification import var, isvar
+from unification import var, isvar, unify
+
+from cons import cons
 
 from kanren.goals import (
     tailo,
@@ -14,6 +14,7 @@ from kanren.goals import (
     itero,
     permuteq,
     membero,
+    rembero,
 )
 from kanren.core import run, eq, goaleval, lall, lallgreedy, EarlyGoalError
 
@@ -154,20 +155,73 @@ def test_permuteq():
 
 
 def test_appendo():
-    assert results(appendo((), (1, 2), (1, 2))) == ({},)
-    assert results(appendo((), (1, 2), (1))) == ()
-    assert results(appendo((1, 2), (3, 4), (1, 2, 3, 4)))
-    assert run(5, x, appendo((1, 2, 3), x, (1, 2, 3, 4, 5))) == ((4, 5),)
-    assert run(5, x, appendo(x, (4, 5), (1, 2, 3, 4, 5))) == ((1, 2, 3),)
-    assert run(5, x, appendo((1, 2, 3), (4, 5), x)) == ((1, 2, 3, 4, 5),)
+    q_lv = var()
+    assert run(0, q_lv, appendo((), (1, 2), (1, 2))) == (q_lv,)
+    assert run(0, q_lv, appendo((), (1, 2), 1)) == ()
+    assert run(0, q_lv, appendo((), (1, 2), (1,))) == ()
+    assert run(0, q_lv, appendo((1, 2), (3, 4), (1, 2, 3, 4))) == (q_lv,)
+    assert run(5, q_lv, appendo((1, 2, 3), q_lv, (1, 2, 3, 4, 5))) == ((4, 5),)
+    assert run(5, q_lv, appendo(q_lv, (4, 5), (1, 2, 3, 4, 5))) == ((1, 2, 3),)
+    assert run(5, q_lv, appendo((1, 2, 3), (4, 5), q_lv)) == ((1, 2, 3, 4, 5),)
+
+    q_lv, r_lv = var(), var()
+
+    assert ([1, 2, 3, 4],) == run(0, q_lv, appendo([1, 2], [3, 4], q_lv))
+    assert ([3, 4],) == run(0, q_lv, appendo([1, 2], q_lv, [1, 2, 3, 4]))
+    assert ([1, 2],) == run(0, q_lv, appendo(q_lv, [3, 4], [1, 2, 3, 4]))
+
+    expected_res = set(
+        [
+            ((), (1, 2, 3, 4)),
+            ((1,), (2, 3, 4)),
+            ((1, 2), (3, 4)),
+            ((1, 2, 3), (4,)),
+            ((1, 2, 3, 4), ()),
+        ]
+    )
+    assert expected_res == set(run(0, (q_lv, r_lv), appendo(q_lv, r_lv, (1, 2, 3, 4))))
+
+    res = run(3, (q_lv, r_lv), appendo(q_lv, [3, 4], r_lv))
+    assert len(res) == 3
+    assert any(len(a) > 0 and isvar(a[0]) for a, b in res)
+    assert all(a + [3, 4] == b for a, b in res)
+
+    res = run(0, (q_lv, r_lv), appendo([3, 4], q_lv, r_lv))
+    assert len(res) == 2
+    assert ([], [3, 4]) == res[0]
+    assert all(
+        type(v) == cons for v in unify((var(), cons(3, 4, var())), res[1]).values()
+    )
 
 
+@pytest.mark.skip("Misspecified test")
 def test_appendo2():
+    # XXX: This test generates goal conjunctions that are non-terminating given
+    # the specified goal ordering.  More specifically, it generates
+    # `lall(appendo(x, y, w), appendo(w, z, ()))`, for which the first
+    # `appendo` produces an infinite stream of results and the second
+    # necessarily fails for all values of the first `appendo` yielding
+    # non-empty `w` unifications.
+    #
+    # The only reason it worked before is the `EarlyGoalError`
+    # and it's implicit goal reordering, which made this case an out-of-place
+    # test for a goal reordering feature that has nothing to do with `appendo`.
+    # Furthermore, the `EarlyGoalError` mechanics do *not* fix this general
+    # problem, and it's trivial to generate an equivalent situation in which
+    # an `EarlyGoalError` is never thrown.
+    #
+    # In other words, it seems like a nice side effect of `EarlyGoalError`, but
+    # it's actually a very costly approach that masks a bigger issue; one that
+    # all miniKanren programmers need to think about when developing.
+
+    x, y, z, w = var(), var(), var(), var()
     for t in [tuple(range(i)) for i in range(5)]:
+        print(t)
         for xi, yi in run(0, (x, y), appendo(x, y, t)):
             assert xi + yi == t
-        results = run(0, (x, y, z), (appendo, x, y, w), (appendo, w, z, t))
-        for xi, yi, zi in results:
+
+        results = run(2, (x, y, z, w), appendo(x, y, w), appendo(w, z, t))
+        for xi, yi, zi, wi in results:
             assert xi + yi + zi == t
 
 
@@ -202,3 +256,20 @@ def test_goal_ordering():
 
     (solution,) = run(1, vals, rules_greedy)
     assert solution == ("green", "white")
+
+
+def test_rembero():
+
+    q_lv = var()
+    assert ([],) == run(0, q_lv, rembero(1, [1], q_lv))
+    assert ([], [1]) == run(0, q_lv, rembero(1, q_lv, []))
+
+    expected_res = (
+        [5, 1, 2, 3, 4],
+        [1, 5, 2, 3, 4],
+        [1, 2, 5, 3, 4],
+        [1, 2, 3, 5, 4],
+        [1, 2, 3, 4],
+        [1, 2, 3, 4, 5],
+    )
+    assert expected_res == run(0, q_lv, rembero(5, q_lv, [1, 2, 3, 4]))

@@ -1,9 +1,10 @@
-import itertools as it
+from itertools import tee
 from functools import partial
-from .util import dicthash, interleave, take, multihash, unique, evalt
-from toolz import groupby, map
 
+from toolz import groupby, map
 from unification import reify, unify
+
+from .util import dicthash, interleave, take, multihash, unique, evalt
 
 
 def fail(s):
@@ -182,7 +183,7 @@ def lanyseq(goals):
     """Construct a logical any with a possibly infinite number of goals."""
 
     def anygoal(s):
-        anygoal.goals, local_goals = it.tee(anygoal.goals)
+        anygoal.goals, local_goals = tee(anygoal.goals)
 
         def f(goals):
             for goal in goals:

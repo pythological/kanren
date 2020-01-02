@@ -1,5 +1,6 @@
 import collections
 
+from functools import partial
 from itertools import permutations
 from collections.abc import Sequence
 
@@ -13,7 +14,6 @@ from .core import (
     conde,
     condeseq,
     lany,
-    lallgreedy,
     lall,
     fail,
     success,
@@ -49,7 +49,7 @@ def conso(h, t, l):
     return eq(cons(h, t), l)
 
 
-def nullo(*args, default_ConsNull=list):
+def nullo(*args, refs=None, default_ConsNull=list):
     """Create a goal asserting that one or more terms are a/the same `ConsNull` type.
 
     `ConsNull` types return proper Python collections when used as a CDR value
@@ -62,19 +62,34 @@ def nullo(*args, default_ConsNull=list):
     walking distinct lists that do not necessarily terminate on the same
     iteration.
 
-    Unground logic variables will be set to the value of the `default_ConsNull` kwarg.
+    Parameters
+    ----------
+    args: tuple of objects
+        The terms to consider as an instance of the `ConsNull` type
+    refs: tuple of objects
+        The terms to use as reference types.  These are not unified with the
+        `ConsNull` type, instead they are used to constrain the `ConsNull`
+        types considered valid.
+    default_ConsNull: type
+        The sequence type to use when all logic variables are unground.
+
     """
 
-    def eqnullo_goal(s):
+    def nullo_goal(s):
 
         nonlocal args, default_ConsNull
+
+        if refs is not None:
+            refs_rf = reify(refs, s)
+        else:
+            refs_rf = ()
 
         args_rf = reify(args, s)
 
         arg_null_types = set(
             # Get an empty instance of the type
             type(a)
-            for a in args_rf
+            for a in args_rf + refs_rf
             # `ConsPair` and `ConsNull` types that are not literally `ConsPair`s
             if isinstance(a, (ConsPair, ConsNull)) and not issubclass(type(a), ConsPair)
         )
@@ -92,7 +107,7 @@ def nullo(*args, default_ConsNull=list):
 
         yield from goaleval(g)(s)
 
-    return eqnullo_goal
+    return nullo_goal
 
 
 def itero(l, default_ConsNull=list):
@@ -232,22 +247,68 @@ def membero(x, coll):
     raise EarlyGoalError()
 
 
-def appendo(l, s, ls, base_type=tuple):
-    """Construct a goal stating ls = l + s.
+def appendo(l, s, out, default_ConsNull=list):
+    """Construct a goal for the relation l + s = ls.
 
     See Byrd thesis pg. 247
     https://scholarworks.iu.edu/dspace/bitstream/handle/2022/8777/Byrd_indiana_0093A_10344.pdf
-
-    Parameters
-    ----------
-    base_type: type
-        The empty collection type to use when all terms are logic variables.
     """
-    if all(map(isvar, (l, s, ls))):
-        raise EarlyGoalError()
-    a, d, res = [var() for i in range(3)]
-    return (
-        lany,
-        (lallgreedy, (eq, l, base_type()), (eq, s, ls)),
-        (lall, (conso, a, d, l), (conso, a, res, ls), (appendo, d, s, res)),
-    )
+
+    def appendo_goal(S):
+        nonlocal l, s, out
+
+        l_rf, s_rf, out_rf = reify((l, s, out), S)
+
+        a, d, res = var(prefix="a"), var(prefix="d"), var(prefix="res")
+
+        _nullo = partial(nullo, default_ConsNull=default_ConsNull)
+
+        g = conde(
+            [
+                # All empty
+                _nullo(s_rf, l_rf, out_rf),
+            ],
+            [
+                # `l` is empty
+                conso(a, d, out_rf),
+                eq(s_rf, out_rf),
+                _nullo(l_rf, refs=(s_rf, out_rf)),
+            ],
+            [
+                conso(a, d, l_rf),
+                conso(a, res, out_rf),
+                appendo(d, s_rf, res, default_ConsNull=default_ConsNull),
+            ],
+        )
+
+        yield from goaleval(g)(S)
+
+    return appendo_goal
+
+
+def rembero(x, l, o, default_ConsNull=list):
+    """Remove the first occurrence of `x` in `l` resulting in `o`."""
+
+    from .constraints import neq
+
+    def rembero_goal(s):
+        nonlocal x, l, o
+
+        x_rf, l_rf, o_rf = reify((x, l, o), s)
+
+        l_car, l_cdr, r = var(), var(), var()
+
+        g = conde(
+            [nullo(l_rf, o_rf, default_ConsNull=default_ConsNull),],
+            [conso(l_car, l_cdr, l_rf), eq(x_rf, l_car), eq(l_cdr, o_rf),],
+            [
+                conso(l_car, l_cdr, l_rf),
+                neq(l_car, x),
+                conso(l_car, r, o_rf),
+                rembero(x_rf, l_cdr, r, default_ConsNull=default_ConsNull),
+            ],
+        )
+
+        yield from goaleval(g)(s)
+
+    return rembero_goal
