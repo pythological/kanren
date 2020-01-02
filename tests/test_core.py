@@ -1,12 +1,9 @@
-from __future__ import absolute_import
-
 from itertools import count
 
-import pytest
-from pytest import raises
-from unification import var
+from pytest import raises, mark
 
-from kanren.goals import membero
+from unification import var, isvar
+
 from kanren.core import (
     run,
     fail,
@@ -25,7 +22,11 @@ from kanren.core import (
 )
 from kanren.util import evalt
 
-w, x, y, z = "wxyz"
+
+def ege_membero(x, coll):
+    if not isvar(coll):
+        return (lany,) + tuple((eq, x, item) for item in coll)
+    raise EarlyGoalError()
 
 
 def test_eq():
@@ -39,41 +40,57 @@ def test_lany():
     assert len(tuple(lany(eq(x, 2), eq(x, 3))({}))) == 2
     assert len(tuple(lany((eq, x, 2), (eq, x, 3))({}))) == 2
 
+    g = lany(ege_membero(x, (1, 2, 3)), ege_membero(x, (2, 3, 4)))
+    assert tuple(g({})) == ({x: 1}, {x: 2}, {x: 3}, {x: 4})
 
-# Test that all three implementations of lallgreedy behave identically for
-# correctly ordered goals.
-@pytest.mark.parametrize("lall_impl", [lallgreedy, lall, lallfirst])
+
+def test_lallfirst():
+    x = var("x")
+    g = lallfirst(ege_membero(x, (1, 2, 3)), ege_membero(x, (2, 3, 4)))
+    assert tuple(g({})) == ({x: 2}, {x: 3})
+    assert tuple(lallfirst()({})) == ({},)
+
+
+def test_lallgreedy():
+    x, y = var("x"), var("y")
+    assert run(0, x, lallgreedy((eq, y, set([1]))), (ege_membero, x, y)) == (1,)
+    with raises(EarlyGoalError):
+        run(0, x, lallgreedy((ege_membero, x, y), (eq, y, {1})))
+
+
+@mark.parametrize("lall_impl", [lallgreedy, lall, lallfirst])
 def test_lall(lall_impl):
+    """Test that all three implementations of lallgreedy behave identically for correctly ordered goals."""
     x, y = var("x"), var("y")
     assert results(lall_impl((eq, x, 2))) == ({x: 2},)
     assert results(lall_impl((eq, x, 2), (eq, x, 3))) == ()
     assert results(lall_impl()) == ({},)
 
-    assert run(0, x, lall_impl((eq, y, (1, 2)), (membero, x, y)))
+    assert run(0, x, lall_impl((eq, y, (1, 2)), (ege_membero, x, y)))
     assert run(0, x, lall_impl()) == (x,)
-    with pytest.raises(EarlyGoalError):
-        run(0, x, lall_impl(membero(x, y)))
+    with raises(EarlyGoalError):
+        run(0, x, lall_impl(ege_membero(x, y)))
 
 
-@pytest.mark.parametrize("lall_impl", [lall, lallfirst])
+@mark.parametrize("lall_impl", [lall, lallfirst])
 def test_safe_reordering_lall(lall_impl):
     x, y = var("x"), var("y")
-    assert run(0, x, lall_impl((membero, x, y), (eq, y, (1, 2)))) == (1, 2)
+    assert run(0, x, lall_impl((ege_membero, x, y), (eq, y, (1, 2)))) == (1, 2)
 
 
 def test_earlysafe():
     x, y = var("x"), var("y")
     assert earlysafe((eq, 2, 2))
     assert earlysafe((eq, 2, 3))
-    assert earlysafe((membero, x, (1, 2, 3)))
-    assert not earlysafe((membero, x, y))
+    assert earlysafe((ege_membero, x, (1, 2, 3)))
+    assert not earlysafe((ege_membero, x, y))
 
 
 def test_earlyorder():
     x, y = var(), var()
     assert earlyorder((eq, 2, x)) == ((eq, 2, x),)
     assert earlyorder((eq, 2, x), (eq, 3, x)) == ((eq, 2, x), (eq, 3, x))
-    assert earlyorder((membero, x, y), (eq, y, (1, 2, 3)))[0] == (eq, y, (1, 2, 3))
+    assert earlyorder((ege_membero, x, y), (eq, y, (1, 2, 3)))[0] == (eq, y, (1, 2, 3))
 
 
 def test_conde():
@@ -138,7 +155,7 @@ def test_goaleval():
     assert goaleval(g) == g
     assert callable(goaleval((eq, x, 2)))
     with raises(EarlyGoalError):
-        goaleval((membero, x, y))
+        goaleval((ege_membero, x, y))
     assert callable(goaleval((lallgreedy, (eq, x, 2))))
 
 
@@ -161,9 +178,8 @@ def test_lall_errors():
 
 
 def test_lany_is_early_safe():
-    x = var()
-    y = var()
-    assert run(0, x, lany((membero, x, y), (eq, x, 2))) == (2,)
+    x, y = var(), var()
+    assert run(0, x, lany((ege_membero, x, y), (eq, x, 2))) == (2,)
 
 
 def results(g, s=None):

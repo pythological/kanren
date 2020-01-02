@@ -50,18 +50,9 @@ def lall(*goals):
 def lallgreedy(*goals):
     """Construct a logical all that greedily evaluates each goals in the order provided.
 
-    Note that this may raise EarlyGoalError when the ordering of the
-    goals is incorrect. It is faster than lall, but should be used
-    with care.
+    Note that this may raise EarlyGoalError when the ordering of the goals is
+    incorrect. It is faster than lall, but should be used with care.
 
-    >>> from kanren import eq, run, membero, var
-    >>> x, y = var('x'), var('y')
-    >>> run(0, x, lallgreedy((eq, y, set([1]))), (membero, x, y))
-    (1,)
-    >>> run(0, x, lallgreedy((membero, x, y), (eq, y, {1})))  # doctest: +SKIP
-    Traceback (most recent call last):
-      ...
-    kanren.core.EarlyGoalError
     """
     if not goals:
         return success
@@ -81,16 +72,7 @@ def lallgreedy(*goals):
 
 
 def lallfirst(*goals):
-    """Construct a logical all that runs goals one at a time.
-
-    >>> from kanren import membero, var
-    >>> x = var('x')
-    >>> g = lallfirst(membero(x, (1,2,3)), membero(x, (2,3,4)))
-    >>> tuple(g({}))
-    ({~x: 2}, {~x: 3})
-    >>> tuple(lallfirst()({}))
-    ({},)
-    """
+    """Construct a logical all that runs goals one at a time."""
     if not goals:
         return success
     if len(goals) == 1:
@@ -117,14 +99,7 @@ def lallfirst(*goals):
 
 
 def lany(*goals):
-    """Construct a logical any goal.
-
-    >>> from kanren import lany, membero, var
-    >>> x = var('x')
-    >>> g = lany(membero(x, (1,2,3)), membero(x, (2,3,4)))
-    >>> tuple(g({}))
-    ({~x: 1}, {~x: 2}, {~x: 3}, {~x: 4})
-    """
+    """Construct a logical any goal."""
     if len(goals) == 1:
         return goals[0]
     return lanyseq(goals)

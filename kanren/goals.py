@@ -13,7 +13,6 @@ from .core import (
     EarlyGoalError,
     conde,
     condeseq,
-    lany,
     lall,
     fail,
     success,
@@ -240,11 +239,20 @@ def goalify(func, name=None):  # pragma: noqa
     return funco
 
 
-def membero(x, coll):
+def membero(x, ls):
     """Construct a goal stating that x is an item of coll."""
-    if not isvar(coll):
-        return (lany,) + tuple((eq, x, item) for item in coll)
-    raise EarlyGoalError()
+
+    def membero_goal(S):
+        nonlocal x, ls
+
+        x_rf, ls_rf = reify((x, ls), S)
+        a, d = var(), var()
+
+        g = lall(conso(a, d, ls), conde([eq(a, x)], [membero(x, d)]))
+
+        yield from goaleval(g)(S)
+
+    return membero_goal
 
 
 def appendo(l, s, out, default_ConsNull=list):

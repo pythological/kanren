@@ -3,6 +3,7 @@ import pytest
 from unification import var, isvar, unify
 
 from cons import cons
+from cons.core import ConsPair
 
 from kanren.goals import (
     tailo,
@@ -18,8 +19,6 @@ from kanren.goals import (
 )
 from kanren.core import eq, goaleval, run
 
-x, y, z, w = var("x"), var("y"), var("z"), var("w")
-
 
 def results(g, s=None):
     if s is None:
@@ -28,6 +27,7 @@ def results(g, s=None):
 
 
 def test_heado():
+    x, y, z = var(), var(), var()
     assert (x, 1) in results(heado(x, (1, 2, 3)))[0].items()
     assert (x, 1) in results(heado(1, (x, 2, 3)))[0].items()
     assert results(heado(x, ())) == ()
@@ -36,6 +36,8 @@ def test_heado():
 
 
 def test_tailo():
+    x, y, z = var(), var(), var()
+
     assert (x, (2, 3)) in results((tailo, x, (1, 2, 3)))[0].items()
     assert (x, ()) in results((tailo, x, (1,)))[0].items()
     assert results((tailo, x, ())) == ()
@@ -44,6 +46,8 @@ def test_tailo():
 
 
 def test_conso():
+    x, y, z = var(), var(), var()
+
     assert not results(conso(x, y, ()))
     assert results(conso(1, (2, 3), (1, 2, 3)))
     assert results(conso(x, (2, 3), (1, 2, 3))) == ({x: 1},)
@@ -62,6 +66,7 @@ def test_conso():
 
 def test_nullo_itero():
 
+    x, y, z = var(), var(), var()
     q_lv, a_lv = var(), var()
 
     assert run(0, q_lv, conso(1, q_lv, [1]), nullo(q_lv))
@@ -98,21 +103,32 @@ def test_nullo_itero():
 
 
 def test_membero():
-    x = var("x")
+    x, y = var(), var()
+
     assert set(run(5, x, membero(x, (1, 2, 3)), membero(x, (2, 3, 4)))) == {2, 3}
 
     assert run(5, x, membero(2, (1, x, 3))) == (2,)
-    assert run(0, x, (membero, 1, (1, 2, 3))) == (x,)
-    assert run(0, x, (membero, 1, (2, 3))) == ()
+    assert run(0, x, membero(1, (1, 2, 3))) == (x,)
+    assert run(0, x, membero(1, (2, 3))) == ()
 
-
-def test_membero_can_be_reused():
     g = membero(x, (0, 1, 2))
-    assert list(goaleval(g)({})) == [{x: 0}, {x: 1}, {x: 2}]
-    assert list(goaleval(g)({})) == [{x: 0}, {x: 1}, {x: 2}]
+    assert tuple(r[x] for r in goaleval(g)({})) == (0, 1, 2)
+
+    def in_cons(x, y):
+        if issubclass(type(y), ConsPair):
+            return x == y.car or in_cons(x, y.cdr)
+        else:
+            return False
+
+    res = run(4, x, membero(1, x))
+    assert all(in_cons(1, r) for r in res)
+
+    res = run(4, (x, y), membero(x, y))
+    assert all(in_cons(i, r) for i, r in res)
 
 
 def test_uneval_membero():
+    x, y = var(), var()
     assert set(run(100, x, (membero, y, ((1, 2, 3), (4, 5, 6))), (membero, x, y))) == {
         1,
         2,
@@ -124,6 +140,8 @@ def test_uneval_membero():
 
 
 def test_seteq():
+
+    x, y = var(), var()
     abc = tuple("abc")
     bca = tuple("bca")
     assert results(seteq(abc, bca))
@@ -149,6 +167,7 @@ def test_permuteq():
     assert not results(permuteq((1, 2, 1), (2, 1, 2)))
     assert not results(permuteq([1, 2, 1], (2, 1, 2)))
 
+    x = var()
     assert set(run(0, x, permuteq(x, (1, 2, 2)))) == set(
         ((1, 2, 2), (2, 1, 2), (2, 2, 1))
     )
@@ -195,7 +214,7 @@ def test_appendo():
 
 
 @pytest.mark.skip("Misspecified test")
-def test_appendo2():
+def test_appendo_reorder():
     # XXX: This test generates goal conjunctions that are non-terminating given
     # the specified goal ordering.  More specifically, it generates
     # `lall(appendo(x, y, w), appendo(w, z, ()))`, for which the first
