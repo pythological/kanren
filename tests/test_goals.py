@@ -13,9 +13,9 @@ from kanren.goals import (
     conso,
     nullo,
     itero,
-    permuteq,
     membero,
     rembero,
+    permuteo,
 )
 from kanren.core import eq, goaleval, run
 
@@ -139,40 +139,6 @@ def test_uneval_membero():
     }
 
 
-def test_seteq():
-
-    x, y = var(), var()
-    abc = tuple("abc")
-    bca = tuple("bca")
-    assert results(seteq(abc, bca))
-    assert len(results(seteq(abc, x))) == 6
-    assert len(results(seteq(x, abc))) == 6
-    assert bca in run(0, x, seteq(abc, x))
-    assert results(seteq((1, 2, 3), (3, x, 1))) == ({x: 2},)
-
-    assert run(0, (x, y), seteq((1, 2, x), (2, 3, y)))[0] == (3, 1)
-    assert not run(0, (x, y), seteq((4, 5, x), (2, 3, y)))
-
-
-def test_permuteq():
-    assert results(permuteq((1, 2), (2, 1)))
-    assert results(permuteq([1, 2], [2, 1]))
-    assert results(permuteq((1, 2, 2), (2, 1, 2)))
-
-    with pytest.raises(ValueError):
-        permuteq(set((1, 2, 2)), set((2, 1, 2)))
-
-    assert not results(permuteq((1, 2), (2, 1, 2)))
-    assert not results(permuteq((1, 2, 3), (2, 1, 2)))
-    assert not results(permuteq((1, 2, 1), (2, 1, 2)))
-    assert not results(permuteq([1, 2, 1], (2, 1, 2)))
-
-    x = var()
-    assert set(run(0, x, permuteq(x, (1, 2, 2)))) == set(
-        ((1, 2, 2), (2, 1, 2), (2, 2, 1))
-    )
-
-
 def test_appendo():
     q_lv = var()
     assert run(0, q_lv, appendo((), (1, 2), (1, 2))) == (q_lv,)
@@ -259,3 +225,83 @@ def test_rembero():
         [1, 2, 3, 4, 5],
     )
     assert expected_res == run(0, q_lv, rembero(5, q_lv, [1, 2, 3, 4]))
+
+
+def test_permuteo():
+
+    from itertools import permutations
+
+    a_lv = var()
+    q_lv = var()
+
+    class Blah:
+        def __hash__(self):
+            raise TypeError()
+
+    # An unhashable sequence with an unhashable object in it
+    obj_1 = [Blah()]
+
+    assert results(permuteo((1, 2), (2, 1))) == ({},)
+    assert results(permuteo((1, obj_1), (obj_1, 1))) == ({},)
+    assert results(permuteo([1, 2], [2, 1])) == ({},)
+    assert results(permuteo((1, 2, 2), (2, 1, 2))) == ({},)
+
+    # (1, obj_1, a_lv) == (1, obj_1, a_lv) ==> {a_lv: a_lv}
+    # (1, obj_1, a_lv) == (1, a_lv, obj_1) ==> {a_lv: obj_1}
+    # (1, obj_1, a_lv) == (a_lv, obj_1, 1) ==> {a_lv: 1}
+    assert run(0, a_lv, permuteo((1, obj_1, a_lv), (obj_1, a_lv, 1))) == (
+        1,
+        a_lv,
+        obj_1,
+    )
+
+    assert not results(permuteo((1, 2), (2, 1, 2)))
+    assert not results(permuteo((1, 2), (2, 1, 2)))
+    assert not results(permuteo((1, 2, 3), (2, 1, 2)))
+    assert not results(permuteo((1, 2, 1), (2, 1, 2)))
+    assert not results(permuteo([1, 2, 1], (2, 1, 2)))
+
+    x = var()
+    assert set(run(0, x, permuteo(x, (1, 2, 2)))) == set(
+        ((1, 2, 2), (2, 1, 2), (2, 2, 1))
+    )
+    q_lv = var()
+
+    assert run(0, q_lv, permuteo((1, 2, 3), (q_lv, 2, 1))) == (3,)
+
+    assert run(0, q_lv, permuteo([1, 2, 3], [3, 2, 1]))
+    assert run(0, q_lv, permuteo((1, 2, 3), (3, 2, 1)))
+    assert run(0, q_lv, permuteo([1, 2, 3], [2, 1])) == ()
+    assert run(0, q_lv, permuteo([1, 2, 3], (3, 2, 1))) == ()
+
+    col = [1, 2, 3]
+    exp_res = set(tuple(i) for i in permutations(col))
+
+    # The first term is ground
+    res = run(0, q_lv, permuteo(col, q_lv))
+    assert all(type(r) == type(col) for r in res)
+
+    res = set(tuple(r) for r in res)
+    assert res == exp_res
+
+    # The second term is ground
+    res = run(0, q_lv, permuteo(q_lv, col))
+    assert all(type(r) == type(col) for r in res)
+
+    res = set(tuple(r) for r in res)
+    assert res == exp_res
+
+    a_lv = var()
+    # Neither terms are ground
+    bi_res = run(5, [q_lv, a_lv], permuteo(q_lv, a_lv))
+
+    assert bi_res[0] == [[], []]
+    bi_var_1 = bi_res[1][0][0]
+    assert isvar(bi_var_1)
+    assert bi_res[1][0] == bi_res[1][1] == [bi_var_1]
+    bi_var_2 = bi_res[2][0][1]
+    assert isvar(bi_var_2) and bi_var_1 is not bi_var_2
+    assert bi_res[2][0] == bi_res[2][1] == [bi_var_1, bi_var_2]
+    assert bi_res[3][0] != bi_res[3][1] == [bi_var_2, bi_var_1]
+    bi_var_3 = bi_res[4][0][2]
+    assert bi_res[4][0] == bi_res[4][1] == [bi_var_1, bi_var_2, bi_var_3]

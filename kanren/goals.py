@@ -1,24 +1,22 @@
-import collections
-
+from operator import length_hint
 from functools import partial
 from itertools import permutations
+from collections import Counter
 from collections.abc import Sequence
 
 from cons import cons
 from cons.core import ConsNull, ConsPair
 from unification import isvar, reify, var
+from unification.core import isground
 
 from .core import (
     eq,
     EarlyGoalError,
     conde,
-    condeseq,
     lall,
-    fail,
-    success,
+    lanyseq,
     goaleval,
 )
-from .util import unique
 
 
 def heado(head, coll):
@@ -109,7 +107,7 @@ def nullo(*args, refs=None, default_ConsNull=list):
     return nullo_goal
 
 
-def itero(l, default_ConsNull=list):
+def itero(l, nullo_refs=None, default_ConsNull=list):
     """Construct a goal asserting that a term is an iterable type.
 
     This is a generic version of the standard `listo` that accounts for
@@ -119,68 +117,16 @@ def itero(l, default_ConsNull=list):
     """
 
     def itero_goal(S):
-        nonlocal l
+        nonlocal l, nullo_refs, default_ConsNull
         l_rf = reify(l, S)
         c, d = var(), var()
         g = conde(
-            [nullo(l_rf, default_ConsNull=default_ConsNull)],
+            [nullo(l_rf, refs=nullo_refs, default_ConsNull=default_ConsNull)],
             [conso(c, d, l_rf), itero(d, default_ConsNull=default_ConsNull)],
         )
         yield from goaleval(g)(S)
 
     return itero_goal
-
-
-def permuteq(a, b, eq2=eq):
-    """Construct a goal asserting equality under permutation.
-
-    For example, (1, 2, 2) equates to (2, 1, 2) under permutation
-    >>> from kanren import var, run, permuteq
-    >>> x = var()
-    >>> run(0, x, permuteq(x, (1, 2)))
-    ((1, 2), (2, 1))
-
-    >>> run(0, x, permuteq((2, 1, x), (2, 1, 2)))
-    (2,)
-    """
-    if isinstance(a, Sequence) and isinstance(b, Sequence):
-        if len(a) != len(b):
-            return fail
-        elif collections.Counter(a) == collections.Counter(b):
-            return success
-        else:
-            c, d = list(a), list(b)
-            for x in list(c):
-                # TODO: This is quadratic in the number items in the sequence.
-                # Need something like a multiset. Maybe use
-                # collections.Counter?
-                try:
-                    d.remove(x)
-                    c.remove(x)
-                except ValueError:
-                    pass
-
-            if len(c) == 1:
-                return (eq2, c[0], d[0])
-            return condeseq(
-                ((eq2, x, d[0]), (permuteq, c[0:i] + c[i + 1 :], d[1:], eq2))
-                for i, x in enumerate(c)
-            )
-    elif not (isinstance(a, Sequence) or isinstance(b, Sequence)):
-        raise ValueError(
-            "Neither a nor b is a Sequence: {}, {}".format(type(a), type(b))
-        )
-
-    if isvar(a) and isvar(b):
-        raise EarlyGoalError()
-
-    if isvar(a) or isvar(b):
-        if isinstance(b, Sequence):
-            c, d = a, b
-        elif isinstance(a, Sequence):
-            c, d = b, a
-
-        return (condeseq, ([eq(c, perm)] for perm in unique(permutations(d, len(d)))))
 
 
 def seteq(a, b, eq2=eq):
@@ -203,40 +149,6 @@ def seteq(a, b, eq2=eq):
         return permuteq(ts(a), b, eq2)
     else:  # not isvar(b)
         return permuteq(a, ts(b), eq2)
-
-
-def goalify(func, name=None):  # pragma: noqa
-    """Convert Python function into kanren goal.
-
-    >>> from kanren import run, goalify, var, membero
-    >>> typo = goalify(type)
-    >>> x = var('x')
-    >>> run(0, x, membero(x, (1, 'cat', 'hat', 2)), (typo, x, str))
-    ('cat', 'hat')
-
-    Goals go both ways.  Here are all of the types in the collection
-
-    >>> typ = var('typ')
-    >>> results = run(0, typ, membero(x, (1, 'cat', 'hat', 2)), (typo, x, typ))
-    >>> print([result.__name__ for result in results])
-    ['int', 'str']
-    """
-
-    def funco(inputs, out):  # pragma: noqa
-        if isvar(inputs):
-            raise EarlyGoalError()
-        else:
-            if isinstance(inputs, (tuple, list)):
-                if any(map(isvar, inputs)):
-                    raise EarlyGoalError()
-                return (eq, func(*inputs), out)
-            else:
-                return (eq, func(inputs), out)
-
-    name = name or (func.__name__ + "o")
-    funco.__name__ = name
-
-    return funco
 
 
 def membero(x, ls):
@@ -320,3 +232,125 @@ def rembero(x, l, o, default_ConsNull=list):
         yield from goaleval(g)(s)
 
     return rembero_goal
+
+
+def permuteo(a, b, inner_eq=eq, default_ConsNull=list):
+    """Construct a goal asserting equality or sequences under permutation.
+
+    For example, (1, 2, 2) equates to (2, 1, 2) under permutation
+    >>> from kanren import var, run, permuteo
+    >>> x = var()
+    >>> run(0, x, permuteo(x, (1, 2)))
+    ((1, 2), (2, 1))
+
+    >>> run(0, x, permuteo((2, 1, x), (2, 1, 2)))
+    (2,)
+    """
+
+    def permuteo_goal(S):
+        nonlocal a, b, default_ConsNull, inner_eq
+
+        a_rf, b_rf = reify((a, b), S)
+
+        # If the lengths differ, then fail
+        a_len, b_len = length_hint(a_rf, -1), length_hint(b_rf, -1)
+        if a_len > 0 and b_len > 0 and a_len != b_len:
+            return
+
+        if isinstance(a_rf, Sequence):
+
+            a_type = type(a_rf)
+
+            if isinstance(b_rf, Sequence):
+
+                # `a` and `b` are sequences, so let's see if we can
+                # pull out all the equal elements using their hashes.
+
+                b_type = type(b_rf)
+
+                if a_type != b_type:
+                    return
+
+                try:
+                    cntr_a, cntr_b = Counter(a_rf), Counter(b_rf)
+                    rdcd_a, rdcd_b = cntr_a - cntr_b, cntr_b - cntr_a
+                    a_rf, b_rf = tuple(rdcd_a.elements()), b_type(rdcd_b.elements())
+                except TypeError:
+                    # TODO: We could probably get more coverage for this case
+                    # by using `HashableForm`.
+                    pass
+
+                # If they're both ground, then simply check that one is a
+                # permutation of the other and be done
+                if isground(a_rf, S) and isground(b_rf, S):
+                    if a_rf in permutations(b_rf):
+                        yield S
+                        return
+                    else:
+                        return
+
+            # Unify all permutations of the sequence `a` with `b`
+            yield from lanyseq(inner_eq(b_rf, a_type(i)) for i in permutations(a_rf))(S)
+
+        elif isinstance(b_rf, Sequence):
+
+            b_type = type(b_rf)
+
+            # Unify all permutations of the sequence `b` with `a`
+            yield from lanyseq(inner_eq(a_rf, b_type(i)) for i in permutations(b_rf))(S)
+
+        else:
+
+            # None of the arguments are proper sequences, so state that one
+            # should be and apply `permuteo` to that.
+
+            a_itero_g = itero(
+                a_rf, nullo_refs=(b_rf,), default_ConsNull=default_ConsNull
+            )
+
+            for S_new in a_itero_g(S):
+                a_new = reify(a_rf, S_new)
+                a_type = type(a_new)
+                yield from lanyseq(
+                    inner_eq(b_rf, a_type(i)) for i in permutations(a_new)
+                )(S_new)
+
+    return permuteo_goal
+
+
+# For backward compatibility
+permuteq = permuteo
+
+
+def goalify(func, name=None):  # pragma: noqa
+    """Convert a Python function into kanren goal.
+
+    >>> from kanren import run, goalify, var, membero
+    >>> typo = goalify(type)
+    >>> x = var('x')
+    >>> run(0, x, membero(x, (1, 'cat', 'hat', 2)), (typo, x, str))
+    ('cat', 'hat')
+
+    Goals go both ways.  Here are all of the types in the collection
+
+    >>> typ = var('typ')
+    >>> results = run(0, typ, membero(x, (1, 'cat', 'hat', 2)), (typo, x, typ))
+    >>> print([result.__name__ for result in results])
+    ['int', 'str']
+    """
+
+    def funco(inputs, out):  # pragma: noqa
+        if isvar(inputs):
+            raise EarlyGoalError()
+        else:
+            if isinstance(inputs, (tuple, list)):
+                if any(map(isvar, inputs)):
+                    raise EarlyGoalError()
+                return (eq, func(*inputs), out)
+            else:
+                return (eq, func(inputs), out)
+
+    name = name or (func.__name__ + "o")
+    funco.__name__ = name
+
+    return funco

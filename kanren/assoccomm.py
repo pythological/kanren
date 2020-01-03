@@ -49,6 +49,7 @@ from .goals import permuteq
 from .facts import Relation
 from .util import groupsizes, index
 from .term import term, arguments, operator
+from .graph import mapo
 
 associative = Relation("associative")
 commutative = Relation("commutative")
@@ -173,7 +174,7 @@ def eq_assoc(u, v, eq=core.eq, n=None):
     return (core.eq, u, v)
 
 
-def eq_comm(u, v, eq=None):
+def eq_comm(u, v, inner_eq=None):
     """Create a goal for commutative equality.
 
     >>> from kanren import run, var, fact
@@ -187,21 +188,40 @@ def eq_comm(u, v, eq=None):
     >>> run(0, x, eq(('add', 1, 2, 3), ('add', 2, x, 1)))
     (3,)
     """
-    eq = eq or eq_comm
-    vtail = var()
+    inner_eq = inner_eq or eq_comm
+    vtail, vhead = var(), var()
+
     if isvar(u) and isvar(v):
-        return (core.eq, u, v)
+        return eq(u, v)
+
     uop, uargs = op_args(u)
     vop, vargs = op_args(v)
+
     if not uop and not vop:
-        return (core.eq, u, v)
+        return eq(u, v)
+
     if vop and not uop:
         uop, uargs = vop, vargs
         v, u = u, v
+
     return (
         conde,
-        ((core.eq, u, v),),
-        ((commutative, uop), (buildo, uop, vtail, v), (permuteq, uargs, vtail, eq)),
+        [eq(u, v)],
+        [
+            (buildo, vhead, vtail, v),
+            (
+                conde,
+                [
+                    (inner_eq, uop, vhead),
+                    (mapo, lambda a, b: (eq_comm, a, b, inner_eq), uargs, vtail),
+                ],
+                [
+                    eq(uop, vhead),
+                    (commutative, uop),
+                    (permuteq, uargs, vtail, inner_eq),
+                ],
+            ),
+        ],
     )
 
 

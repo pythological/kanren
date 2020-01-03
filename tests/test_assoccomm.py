@@ -20,9 +20,9 @@ from kanren.assoccomm import (
 )
 from kanren.term import operator, arguments, term
 
-a = "assoc_op"
-c = "comm_op"
 x, y = var("x"), var("y")
+
+a, c = "assoc_op", "comm_op"
 fact(associative, a)
 fact(commutative, c)
 
@@ -128,9 +128,9 @@ def test_eq_assoccomm():
     assert results(eqac((1,), (1,)))
     assert results(eqac(x, (1,)))
     assert results(eqac((1,), x))
-    assert results(eqac((ac, (ac, 1, x), y), (ac, 2, (ac, 3, 1))))
     assert results((eqac, 1, 1))
     assert results(eqac((a, (a, 1, 2), 3), (a, 1, 2, 3)))
+    assert results(eqac((ac, (ac, 1, x), y), (ac, 2, (ac, 3, 1))))
     assert results(eqac((ac, (ac, 1, 2), 3), (ac, 1, 2, 3)))
     assert results(eqac((ac, 3, (ac, 1, 2)), (ac, 1, 2, 3)))
     assert not results(eqac((ac, 1, 1), ("other_op", 1, 1)))
@@ -155,8 +155,19 @@ def test_expr():
 def test_deep_commutativity():
     x, y = var("x"), var("y")
 
+    e1 = ((c, 3, 1),)
+    e2 = ((c, 1, x),)
+
+    assert run(0, x, eq_comm(e1, e2)) == (3,)
+
+    e1 = (2, (c, 3, 1))
+    e2 = (y, (c, 1, x))
+
+    assert run(0, (x, y), eq_comm(e1, e2)) == ((3, 2),)
+
     e1 = (c, (c, 1, x), y)
     e2 = (c, 2, (c, 3, 1))
+
     assert run(0, (x, y), eq_comm(e1, e2)) == ((3, 2),)
 
 

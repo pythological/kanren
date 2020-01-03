@@ -13,7 +13,7 @@ from cons import cons
 
 from kanren import run, eq, conde, lall
 from kanren.constraints import isinstanceo
-from kanren.graph import applyo, reduceo, map_anyo, walko
+from kanren.graph import applyo, reduceo, map_anyo, walko, mapo
 
 
 class OrderedFunction(object):
@@ -145,6 +145,29 @@ def test_reduceo():
     res = run(2, q_lv, full_math_reduceo(q_lv, 1))
     assert res[0] == etuple(log, etuple(exp, 1))
     assert res[1] == etuple(log, etuple(exp, etuple(log, etuple(exp, 1))))
+
+
+def test_mapo():
+    q_lv = var()
+
+    def blah(x, y):
+        return conde([eq(x, 1), eq(y, "a")], [eq(x, 3), eq(y, "b")])
+
+    assert run(0, q_lv, mapo(blah, [], q_lv)) == ([],)
+    assert run(0, q_lv, mapo(blah, [1, 2, 3], q_lv)) == ()
+    assert run(0, q_lv, mapo(blah, [1, 1, 3], q_lv)) == (["a", "a", "b"],)
+    assert run(0, q_lv, mapo(blah, q_lv, ["a", "a", "b"])) == ([1, 1, 3],)
+
+    exp_res = (
+        [[], []],
+        [[1], ["a"]],
+        [[3], ["b"]],
+        [[1, 1], ["a", "a"]],
+        [[3, 1], ["b", "a"]],
+    )
+
+    a_lv = var()
+    assert run(5, [q_lv, a_lv], mapo(blah, q_lv, a_lv)) == exp_res
 
 
 def test_map_anyo_types():

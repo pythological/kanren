@@ -57,6 +57,30 @@ def applyo(o_rator, o_rands, obj):
     return applyo_goal
 
 
+def mapo(relation, a, b, null_type=list):
+    """Apply a relation to corresponding elements in two sequences and succeed if the relation succeeds for all pairs."""
+
+    def mapo_goal(S):
+
+        a_rf, b_rf = reify((a, b), S)
+        b_car, b_cdr = var(), var()
+        a_car, a_cdr = var(), var()
+
+        g = conde(
+            [nullo(a_rf, b_rf, default_ConsNull=null_type)],
+            [
+                conso(a_car, a_cdr, a_rf),
+                conso(b_car, b_cdr, b_rf),
+                relation(a_car, b_car),
+                mapo(relation, a_cdr, b_cdr, null_type=null_type),
+            ],
+        )
+
+        yield from goaleval(g)(S)
+
+    return mapo_goal
+
+
 def map_anyo(relation, l_in, l_out, null_type=list):
     """Apply a relation to corresponding elements in two sequences and succeed if at least one pair succeeds.
 
