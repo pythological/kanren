@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 from unification import var
 
 from kanren.core import run, conde

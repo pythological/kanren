@@ -2,8 +2,6 @@
 Based off
 https://github.com/holtchesley/embedded-logic/blob/master/kanren/sudoku.ipynb
 """
-from __future__ import absolute_import
-
 from unification import var
 
 from kanren import run

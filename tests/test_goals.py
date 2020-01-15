@@ -9,7 +9,6 @@ from kanren.goals import (
     tailo,
     heado,
     appendo,
-    seteq,
     conso,
     nullo,
     itero,

@@ -129,28 +129,6 @@ def itero(l, nullo_refs=None, default_ConsNull=list):
     return itero_goal
 
 
-def seteq(a, b, eq2=eq):
-    """Construct a goal asserting set equality.
-
-    For example (1, 2, 3) set equates to (2, 1, 3)
-
-    >>> from kanren import var, run, seteq
-    >>> x = var()
-    >>> run(0, x, seteq(x, (1, 2)))
-    ((1, 2), (2, 1))
-
-    >>> run(0, x, seteq((2, 1, x), (3, 1, 2)))
-    (3,)
-    """
-    ts = lambda x: tuple(set(x))
-    if not isvar(a) and not isvar(b):
-        return permuteq(ts(a), ts(b), eq2)
-    elif not isvar(a):
-        return permuteq(ts(a), b, eq2)
-    else:  # not isvar(b)
-        return permuteq(a, ts(b), eq2)
-
-
 def membero(x, ls):
     """Construct a goal stating that x is an item of coll."""
 
