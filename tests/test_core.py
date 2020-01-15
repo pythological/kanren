@@ -175,3 +175,36 @@ def results(g, s=None):
 def test_dict():
     x = var()
     assert run(0, x, eq({1: x}, {1: 2})) == (2,)
+
+
+def test_goal_ordering():
+    # Regression test for https://github.com/logpy/logpy/issues/58
+
+    def lefto(q, p, lst):
+        if isvar(lst):
+            raise EarlyGoalError()
+        return ege_membero((q, p), zip(lst, lst[1:]))
+
+    vals = var()
+
+    # Verify the solution can be computed when we specify the execution
+    # ordering.
+    rules_greedy = (
+        lallgreedy,
+        (eq, (var(), var()), vals),
+        (lefto, "green", "white", vals),
+    )
+
+    (solution,) = run(1, vals, rules_greedy)
+    assert solution == ("green", "white")
+
+    # Verify that attempting to compute the "safe" order does not itself cause
+    # the evaluation to fail.
+    rules_greedy = (
+        lall,
+        (eq, (var(), var()), vals),
+        (lefto, "green", "white", vals),
+    )
+
+    (solution,) = run(1, vals, rules_greedy)
+    assert solution == ("green", "white")
