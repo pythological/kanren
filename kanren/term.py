@@ -1,7 +1,19 @@
+from collections.abc import Sequence
+
 from unification import unify, reify
 from unification.core import _unify, _reify
 
+from cons.core import cons
+
 from etuples import rator as operator, rands as arguments, apply as term
+
+
+@term.register(object, Sequence)
+def term_Sequence(rator, rands):
+    # Overwrite the default `apply` dispatch function and make it preserve
+    # types
+    res = cons(rator, rands)
+    return res
 
 
 def unifiable_with_term(cls):

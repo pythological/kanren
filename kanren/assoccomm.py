@@ -107,7 +107,7 @@ def makeops(op, lists):
 
     >>> from kanren.assoccomm import makeops
     >>> makeops('add', [(1, 2), (3, 4, 5)])
-    (ExpressionTuple(('add', 1, 2)), ExpressionTuple(('add', 3, 4, 5)))
+    (('add', 1, 2), ('add', 3, 4, 5))
     """
     return tuple(l[0] if len(l) == 1 else build(op, l) for l in lists)
 
@@ -151,7 +151,7 @@ def eq_assoc(u, v, eq=core.eq, n=None):
 
     >>> x = var()
     >>> run(0, x, eq(('add', 1, 2, 3), ('add', 1, x)))
-    (ExpressionTuple(('add', 2, 3)),)
+    (('add', 2, 3),)
     """
     uop, _ = op_args(u)
     vop, _ = op_args(v)
@@ -282,7 +282,7 @@ def eq_assoccomm(u, v):
     >>> e1 = ('add', 1, 2, 3)
     >>> e2 = ('add', 1, x)
     >>> run(0, x, eq(e1, e2))
-    (ExpressionTuple(('add', 2, 3)), ExpressionTuple(('add', 3, 2)))
+    (('add', 2, 3), ('add', 3, 2))
     """
     uop, uargs = op_args(u)
     vop, vargs = op_args(v)
