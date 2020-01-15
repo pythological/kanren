@@ -186,7 +186,7 @@ def everyg(predicate, coll):
     return (lall,) + tuple((predicate, x) for x in coll)
 
 
-def run(n, x, *goals):
+def run_all(n, x, *goals, results_filter=None):
     """Run a logic program and obtain n solutions that satisfy the given goals.
 
     >>> from kanren import run, var, eq
@@ -207,7 +207,12 @@ def run(n, x, *goals):
         (i.e. `lall`).
     """
     results = map(partial(reify, x), goaleval(lall(*goals))({}))
-    return take(n, unique(results, key=multihash))
+    if results_filter is not None:
+        results = results_filter(results)
+    return take(n, results)
+
+
+run = partial(run_all, results_filter=partial(unique, key=multihash))
 
 
 class EarlyGoalError(Exception):
