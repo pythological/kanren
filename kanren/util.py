@@ -1,5 +1,9 @@
 from itertools import chain, islice
-from collections.abc import Hashable, MutableSet, Set
+from collections import namedtuple
+from collections.abc import Hashable, MutableSet, Set, Mapping, Iterable
+
+
+HashableForm = namedtuple("HashableForm", ["type", "data"])
 
 
 class FlexibleSet(MutableSet):
@@ -20,7 +24,7 @@ class FlexibleSet(MutableSet):
         try:
             self.set.add(item)
         except TypeError:
-            # TODO: Could try `multihash`.
+            # TODO: Could try `make_hashable`.
             # TODO: Use `bisect` for unhashable but orderable elements
             if item not in self.list:
                 self.list.append(item)
@@ -113,17 +117,21 @@ def dicthash(d):
     return hash(frozenset(d.items()))
 
 
+def make_hashable(x):
+    # TODO: Better as a dispatch function?
+    if hashable(x):
+        return x
+    if isinstance(x, slice):
+        return HashableForm(type(x), (x.start, x.stop, x.step))
+    if isinstance(x, Mapping):
+        return HashableForm(type(x), frozenset(tuple(multihash(i) for i in x.items())))
+    if isinstance(x, Iterable):
+        return HashableForm(type(x), tuple(multihash(i) for i in x))
+    raise TypeError(f"Hashing not covered for {x}")
+
+
 def multihash(x):
-    try:
-        return hash(x)
-    except TypeError:
-        if isinstance(x, (list, tuple, set, frozenset)):
-            return hash(tuple(multihash(i) for i in x))
-        if type(x) is dict:
-            return hash(frozenset(tuple(multihash(i) for i in x.items())))
-        if type(x) is slice:
-            return hash((x.start, x.stop, x.step))
-        raise TypeError("Hashing not covered for " + str(x))
+    return hash(make_hashable(x))
 
 
 def unique(seq, key=lambda x: x):
