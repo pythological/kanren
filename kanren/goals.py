@@ -212,7 +212,7 @@ def rembero(x, l, o, default_ConsNull=list):
     return rembero_goal
 
 
-def permuteo(a, b, inner_eq=eq, default_ConsNull=list):
+def permuteo(a, b, inner_eq=eq, default_ConsNull=list, no_ident=False):
     """Construct a goal asserting equality or sequences under permutation.
 
     For example, (1, 2, 2) equates to (2, 1, 2) under permutation
@@ -239,43 +239,70 @@ def permuteo(a, b, inner_eq=eq, default_ConsNull=list):
 
             a_type = type(a_rf)
 
-            if isinstance(b_rf, Sequence):
+            a_perms = permutations(a_rf)
 
-                # `a` and `b` are sequences, so let's see if we can
-                # pull out all the equal elements using their hashes.
+            if no_ident:
+                next(a_perms)
+
+            if isinstance(b_rf, Sequence):
 
                 b_type = type(b_rf)
 
-                if a_type != b_type:
+                # Fail on mismatched types or straight equality (when
+                # `no_ident` is enabled)
+                if a_type != b_type or (no_ident and a_rf == b_rf):
                     return
 
                 try:
+                    # `a` and `b` are sequences, so let's see if we can pull out
+                    # all the (hash-)equivalent elements.
+                    # XXX: Use of this requires that the equivalence relation
+                    # implied by `inner_eq` be a *superset* of `eq`.
+
                     cntr_a, cntr_b = Counter(a_rf), Counter(b_rf)
                     rdcd_a, rdcd_b = cntr_a - cntr_b, cntr_b - cntr_a
-                    a_rf, b_rf = tuple(rdcd_a.elements()), b_type(rdcd_b.elements())
+
+                    if len(rdcd_a) == len(rdcd_b) == 0:
+                        yield S
+                        return
+                    elif len(rdcd_a) < len(cntr_a):
+                        a_rf, b_rf = tuple(rdcd_a.elements()), b_type(rdcd_b.elements())
+                        a_perms = permutations(a_rf)
+
                 except TypeError:
                     # TODO: We could probably get more coverage for this case
                     # by using `HashableForm`.
                     pass
 
-                # If they're both ground, then simply check that one is a
-                # permutation of the other and be done
-                if isground(a_rf, S) and isground(b_rf, S):
-                    if a_rf in permutations(b_rf):
+                # If they're both ground and we're using basic unification,
+                # then simply check that one is a permutation of the other and
+                # be done.  No need to create and evaluate a bunch of goals in
+                # order to do something that can be done right here.
+                # Naturally, this assumes that the `isground` checks aren't
+                # nearly as costly as all that other stuff.  If the gains
+                # depend on the sizes of `a` and `b`, then we could do
+                # `length_hint` checks first.
+                if inner_eq == eq and isground(a_rf, S) and isground(b_rf, S):
+                    if tuple(b_rf) in a_perms:
                         yield S
                         return
                     else:
+                        # This has to be a definitive check, since we can only
+                        # use the `a_perms` generator once; plus, we don't want
+                        # to iterate over it more than once!
                         return
 
-            # Unify all permutations of the sequence `a` with `b`
-            yield from lanyseq(inner_eq(b_rf, a_type(i)) for i in permutations(a_rf))(S)
+            yield from lanyseq(inner_eq(b_rf, a_type(i)) for i in a_perms)(S)
 
         elif isinstance(b_rf, Sequence):
 
             b_type = type(b_rf)
+            b_perms = permutations(b_rf)
 
-            # Unify all permutations of the sequence `b` with `a`
-            yield from lanyseq(inner_eq(a_rf, b_type(i)) for i in permutations(b_rf))(S)
+            if no_ident:
+                next(b_perms)
+
+            yield from lanyseq(inner_eq(a_rf, b_type(i)) for i in b_perms)(S)
 
         else:
 
@@ -289,9 +316,12 @@ def permuteo(a, b, inner_eq=eq, default_ConsNull=list):
             for S_new in a_itero_g(S):
                 a_new = reify(a_rf, S_new)
                 a_type = type(a_new)
-                yield from lanyseq(
-                    inner_eq(b_rf, a_type(i)) for i in permutations(a_new)
-                )(S_new)
+                a_perms = permutations(a_new)
+
+                if no_ident:
+                    next(a_perms)
+
+                yield from lanyseq(inner_eq(b_rf, a_type(i)) for i in a_perms)(S_new)
 
     return permuteo_goal
 

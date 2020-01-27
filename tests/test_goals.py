@@ -16,7 +16,7 @@ from kanren.goals import (
     rembero,
     permuteo,
 )
-from kanren.core import eq, goaleval, run
+from kanren.core import eq, goaleval, run, conde
 
 
 def results(g, s=None):
@@ -304,3 +304,21 @@ def test_permuteo():
     assert bi_res[3][0] != bi_res[3][1] == [bi_var_2, bi_var_1]
     bi_var_3 = bi_res[4][0][2]
     assert bi_res[4][0] == bi_res[4][1] == [bi_var_1, bi_var_2, bi_var_3]
+
+    assert run(0, x, permuteo((1, 2), (1, 2), no_ident=True)) == ()
+    assert run(0, True, permuteo((1, 2), (2, 1), no_ident=True)) == (True,)
+    assert run(0, x, permuteo((), x, no_ident=True)) == ()
+    assert run(0, x, permuteo(x, (), no_ident=True)) == ()
+    assert run(0, x, permuteo((1,), x, no_ident=True)) == ()
+    assert run(0, x, permuteo(x, (1,), no_ident=True)) == ()
+    assert (1, 2, 3) not in run(0, x, permuteo((1, 2, 3), x, no_ident=True))
+    assert (1, 2, 3) not in run(0, x, permuteo(x, (1, 2, 3), no_ident=True))
+    y = var()
+    assert all(a != b for a, b in run(6, [x, y], permuteo(x, y, no_ident=True)))
+
+    def eq_permute(x, y):
+        return conde([eq(x, y)], [permuteo(a, b) for a, b in zip(x, y)])
+
+    assert run(
+        0, True, permuteo((1, (2, 3)), ((3, 2), 1), inner_eq=eq_permute, no_ident=True)
+    ) == (True,)
