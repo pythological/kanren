@@ -293,3 +293,24 @@ def goaleval(goal):
     if isinstance(goal, tuple):  # goal is not yet evaluated like (eq, x, 1)
         return find_fixed_point(evalt, goal)
     raise TypeError("Expected either function or tuple")
+
+
+def dbgo(*args, msg=None):  # pragma: no cover
+    """Construct a goal that sets a debug trace and prints reified arguments."""
+    from pprint import pprint
+
+    def dbgo_goal(S):
+        nonlocal args
+        args = reify(args, S)
+
+        if msg is not None:
+            print(msg)
+
+        pprint(args)
+
+        import pdb
+
+        pdb.set_trace()
+        yield S
+
+    return dbgo_goal
