@@ -186,6 +186,22 @@ def everyg(predicate, coll):
     return (lall,) + tuple((predicate, x) for x in coll)
 
 
+def ifa(g1, g2):
+    """Create a goal operator that returns the first stream unless it fails."""
+
+    def ifa_goal(S):
+        g1_stream = goaleval(g1)(S)
+        S_new = next(g1_stream, None)
+
+        if S_new is None:
+            yield from goaleval(g2)(S)
+        else:
+            yield S_new
+            yield from g1_stream
+
+    return ifa_goal
+
+
 def Zzz(gctor, *args, **kwargs):
     """Create an inverse-η-delay for a goal."""
 

@@ -19,6 +19,7 @@ from kanren.core import (
     earlysafe,
     lallfirst,
     condeseq,
+    ifa,
 )
 from kanren.util import evalt
 
@@ -224,3 +225,28 @@ def test_goal_ordering():
 
     (solution,) = run(1, vals, rules_greedy)
     assert solution == ("green", "white")
+
+
+def test_ifa():
+    x, y = var(), var()
+
+    assert run(0, (x, y), ifa(lall(eq(x, True), eq(y, 1)), eq(y, 2))) == ((True, 1),)
+    assert run(
+        0, y, eq(x, False), ifa(lall(eq(x, True), eq(y, 1)), lall(eq(y, 2)))
+    ) == (2,)
+    assert (
+        run(
+            0,
+            y,
+            eq(x, False),
+            ifa(lall(eq(x, True), eq(y, 1)), lall(eq(x, True), eq(y, 2))),
+        )
+        == ()
+    )
+
+    assert run(
+        0,
+        y,
+        eq(x, True),
+        ifa(lall(eq(x, True), eq(y, 1)), lall(eq(x, True), eq(y, 2))),
+    ) == (1,)
