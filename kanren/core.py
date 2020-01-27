@@ -186,6 +186,15 @@ def everyg(predicate, coll):
     return (lall,) + tuple((predicate, x) for x in coll)
 
 
+def Zzz(gctor, *args, **kwargs):
+    """Create an inverse-η-delay for a goal."""
+
+    def Zzz_goal(S):
+        yield from goaleval(gctor(*args, **kwargs))(S)
+
+    return Zzz_goal
+
+
 def run_all(n, x, *goals, results_filter=None):
     """Run a logic program and obtain n solutions that satisfy the given goals.
 
