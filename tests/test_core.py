@@ -2,6 +2,7 @@ from itertools import count
 
 from pytest import raises, mark
 
+from cons import cons
 from unification import var, isvar
 
 from kanren.core import (
@@ -20,6 +21,7 @@ from kanren.core import (
     lallfirst,
     condeseq,
     ifa,
+    ground_order,
 )
 from kanren.util import evalt
 
@@ -250,3 +252,14 @@ def test_ifa():
         eq(x, True),
         ifa(lall(eq(x, True), eq(y, 1)), lall(eq(x, True), eq(y, 2))),
     ) == (1,)
+
+
+def test_ground_order():
+    x, y, z = var(), var(), var()
+    assert run(0, x, ground_order((y, [1, z], 1), x)) == ([1, [1, z], y],)
+    a, b, c = var(), var(), var()
+    assert run(0, (a, b, c), ground_order((y, [1, z], 1), (a, b, c))) == (
+        (1, [1, z], y),
+    )
+    assert run(0, z, ground_order([cons(x, y), (x, y)], z)) == ([(x, y), cons(x, y)],)
+    assert run(0, z, ground_order([(x, y), cons(x, y)], z)) == ([(x, y), cons(x, y)],)

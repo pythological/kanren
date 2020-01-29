@@ -1,8 +1,11 @@
 from itertools import tee
 from functools import partial
+from collections.abc import Sequence
 
 from toolz import groupby, map
-from unification import reify, unify
+from cons.core import ConsPair
+from unification import reify, unify, isvar
+from unification.core import isground
 
 from .util import dicthash, interleave, take, multihash, unique, evalt
 
@@ -184,6 +187,37 @@ def condeseq(goalseqs):
 def everyg(predicate, coll):
     """Assert that a predicate applies to all elements of a collection."""
     return (lall,) + tuple((predicate, x) for x in coll)
+
+
+def ground_order_key(S, x):
+    if isvar(x):
+        return 2
+    elif isground(x, S):
+        return -1
+    elif issubclass(type(x), ConsPair):
+        return 1
+    else:
+        return 0
+
+
+def ground_order(in_args, out_args):
+    """Construct a non-relational goal that orders a list of terms based on groundedness (grounded precede ungrounded)."""
+
+    def ground_order_goal(S):
+        nonlocal in_args, out_args
+
+        in_args_rf, out_args_rf = reify((in_args, out_args), S)
+
+        S_new = unify(
+            list(out_args_rf) if isinstance(out_args_rf, Sequence) else out_args_rf,
+            sorted(in_args_rf, key=partial(ground_order_key, S)),
+            S,
+        )
+
+        if S_new is not False:
+            yield S_new
+
+    return ground_order_goal
 
 
 def ifa(g1, g2):
