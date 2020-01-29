@@ -6,8 +6,8 @@ import pytest
 from unification import isvar
 
 from kanren import membero
-from kanren.core import (success, fail, var, run,
-                         condeseq, eq)
+from kanren.core import succeed, fail, var, run, condeseq, eq
+
 try:
     import sympy.ntheory.generate as sg
 except ImportError:
@@ -19,7 +19,7 @@ def primo(x):
     if isvar(x):
         return condeseq([(eq, x, p)] for p in map(sg.prime, it.count(1)))
     else:
-        return success if sg.isprime(x) else fail
+        return succeed if sg.isprime(x) else fail
 
 
 def test_primo():

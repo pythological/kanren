@@ -11,7 +11,7 @@ def fail(s):
     return iter(())
 
 
-def success(s):
+def succeed(s):
     return iter((s,))
 
 
@@ -55,7 +55,7 @@ def lallgreedy(*goals):
 
     """
     if not goals:
-        return success
+        return succeed
     if len(goals) == 1:
         return goals[0]
 
@@ -74,7 +74,7 @@ def lallgreedy(*goals):
 def lallfirst(*goals):
     """Construct a logical all that runs goals one at a time."""
     if not goals:
-        return success
+        return succeed
     if len(goals) == 1:
         return goals[0]
 

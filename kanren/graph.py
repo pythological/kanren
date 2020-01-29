@@ -7,7 +7,7 @@ from cons.core import ConsError
 
 from etuples import etuple, apply, rands, rator
 
-from .core import eq, conde, lall, goaleval, success, Zzz, fail
+from .core import eq, conde, lall, goaleval, succeed, Zzz, fail
 from .goals import conso, nullo
 
 
@@ -130,7 +130,7 @@ def map_anyo(
 
 
 def vararg_success(*args):
-    return success
+    return succeed
 
 
 def eq_length(u, v, default_ConsNull=list):
