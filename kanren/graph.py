@@ -7,7 +7,7 @@ from cons.core import ConsError
 
 from etuples import etuple, apply, rands, rator
 
-from .core import eq, conde, lall, goaleval, succeed, Zzz, fail
+from .core import eq, conde, lall, goaleval, succeed, Zzz, fail, ground_order
 from .goals import conso, nullo
 
 
@@ -260,3 +260,69 @@ def walko(
         yield from goaleval(g)(s)
 
     return walko_goal
+
+
+def term_walko(
+    rator_goal,
+    rands_goal,
+    a,
+    b,
+    null_type=etuple,
+    no_ident=False,
+    format_step=None,
+    **kwargs
+):
+    """Construct a goal for walking a term graph.
+
+    This implementation is somewhat specific to the needs of `eq_comm` and
+    `eq_assoc`, but it could be transferred to `kanren.graph`.
+
+    XXX: Make sure `rator_goal` will succeed for unground logic variables;
+    otherwise, this will diverge.
+    XXX: `rands_goal` should not be contain `eq`, i.e. `rands_goal(x, x)`
+    should always fail!
+    """
+
+    def single_step(s, t):
+        u, v = var(), var()
+        u_rator, u_rands = var(), var()
+        v_rands = var()
+
+        return lall(
+            ground_order((s, t), (u, v)),
+            applyo(u_rator, u_rands, u),
+            applyo(u_rator, v_rands, v),
+            rator_goal(u_rator),
+            # These make sure that there are at least two rands, which
+            # makes sense for commutativity and associativity, at least.
+            conso(var(), var(), u_rands),
+            conso(var(), var(), v_rands),
+            Zzz(rands_goal, u_rands, v_rands, u_rator, **kwargs),
+        )
+
+    def term_walko_step(s, t):
+        nonlocal rator_goal, rands_goal, null_type
+        u, v = var(), var()
+        z, w = var(), var()
+
+        return lall(
+            ground_order((s, t), (u, v)),
+            format_step(u, w) if format_step is not None else eq(u, w),
+            conde(
+                [
+                    # Apply, then walk or return
+                    single_step(w, v),
+                ],
+                [
+                    # Walk, then apply or return
+                    map_anyo(term_walko_step, w, z, null_type=null_type),
+                    conde([eq(z, v)], [single_step(z, v)]),
+                ],
+            ),
+        )
+
+    return lall(
+        term_walko_step(a, b)
+        if no_ident
+        else conde([term_walko_step(a, b)], [eq(a, b)]),
+    )

@@ -28,120 +28,168 @@ be used in the computer algebra systems SymPy and Theano.
 >>> print(run(0, (x,y), eq(pattern, expr)))
 ((3, 2),)
 """
+from functools import partial
+from operator import length_hint, eq as equal
+from collections.abc import Sequence
 
-from unification.utils import transitive_get as walk
-from unification import isvar, var
+from toolz import sliding_window
 
-from cons.core import ConsError
+from unification import isvar, var, reify, unify
 
-from . import core
-from .core import (
-    unify,
-    conde,
-    eq,
-    fail,
-    lallgreedy,
-    EarlyGoalError,
-    condeseq,
-    goaleval,
-)
-from .goals import permuteq
+from cons.core import ConsError, ConsPair, car, cdr
+
+from etuples import etuple
+
+from .core import conde, condeseq, eq, goaleval, ground_order, lall, succeed
+from .goals import itero, permuteo
 from .facts import Relation
-from .util import groupsizes, index
-from .term import term, arguments, operator
-from .graph import mapo
+from .graph import applyo, term_walko
+from .term import term, operator, arguments
 
 associative = Relation("associative")
 commutative = Relation("commutative")
 
+# For backward compatibility
+buildo = applyo
 
-def assocunify(u, v, s, eq=core.eq, n=None):
-    """Perform associative unification.
 
-    See Also
-    --------
-        eq_assoccomm
+def op_args(x):
+    """Break apart x into an operation and tuple of args."""
+    if isvar(x):
+        return None, None
+    try:
+        return operator(x), arguments(x)
+    except (ConsError, NotImplementedError):
+        return None, None
+
+
+def flatten_assoc_args(op_predicate, items):
+    for i in items:
+        if isinstance(i, ConsPair) and op_predicate(car(i)):
+            i_cdr = cdr(i)
+            if length_hint(i_cdr) > 0:
+                yield from flatten_assoc_args(op_predicate, i_cdr)
+            else:
+                yield i
+        else:
+            yield i
+
+
+def assoc_args(rator, rands, n, ctor=None):
+    """Produce all associative argument combinations of rator + rands in n-sized rand groupings.
+
+    >>> from kanren.assoccomm import assoc_args
+    >>> list(assoc_args('op', [1, 2, 3], 2))
+    [[['op', 1, 2], 3], [1, ['op', 2, 3]]]
     """
-    uop, uargs = op_args(u)
-    vop, vargs = op_args(v)
+    assert n > 0
 
-    if not uop and not vop:
-        res = unify(u, v, s)
-        if res is not False:
-            return (res,)  # TODO: iterate through all possibilities
+    rands_l = list(rands)
 
-    if uop and vop:
-        s = unify(uop, vop, s)
-        if s is False:
-            return ().__iter__()
-        op = walk(uop, s)
+    if ctor is None:
+        ctor = type(rands)
 
-        sm, lg = (uargs, vargs) if len(uargs) <= len(vargs) else (vargs, uargs)
-        ops = assocsized(op, lg, len(sm))
-        goal = condeseq([(eq, a, b) for a, b, in zip(sm, lg2)] for lg2 in ops)
-        return goaleval(goal)(s)
+    if n == len(rands_l):
+        yield ctor(rands)
+        return
 
-    if uop:
-        op, tail = uop, uargs
-        b = v
-    if vop:
-        op, tail = vop, vargs
-        b = u
-
-    ns = [n] if n else range(2, len(tail) + 1)
-    knowns = (build(op, x) for n in ns for x in assocsized(op, tail, n))
-
-    goal = condeseq([(core.eq, b, k)] for k in knowns)
-    return goaleval(goal)(s)
+    for i, new_rands in enumerate(sliding_window(n, rands_l)):
+        prefix = rands_l[:i]
+        new_term = term(rator, ctor(new_rands))
+        suffix = rands_l[n + i :]
+        res = ctor(prefix + [new_term] + suffix)
+        yield res
 
 
-def assocsized(op, tail, n):
-    """Produce all associative combinations of x in n groups."""
-    gsizess = groupsizes(len(tail), n)
-    partitions = (groupsizes_to_partition(*gsizes) for gsizes in gsizess)
-    return (makeops(op, partition(tail, part)) for part in partitions)
+def eq_assoc_args(
+    op, a_args, b_args, n=None, inner_eq=eq, no_ident=False, null_type=etuple
+):
+    """Create a goal that applies associative unification to an operator and two sets of arguments.
 
-
-def makeops(op, lists):
-    """Construct operations from an op and parition lists.
-
-    >>> from kanren.assoccomm import makeops
-    >>> makeops('add', [(1, 2), (3, 4, 5)])
-    (('add', 1, 2), ('add', 3, 4, 5))
+    This is a non-relational utility goal.  It does assumes that the op and at
+    least one set of arguments are ground under the state in which it is
+    evaluated.
     """
-    return tuple(l[0] if len(l) == 1 else build(op, l) for l in lists)
+    u_args, v_args = var(), var()
+
+    def eq_assoc_args_goal(S):
+        nonlocal op, u_args, v_args, n
+
+        (op_rf, u_args_rf, v_args_rf, n_rf) = reify((op, u_args, v_args, n), S)
+
+        if isinstance(v_args_rf, Sequence):
+            u_args_rf, v_args_rf = v_args_rf, u_args_rf
+
+        if isinstance(u_args_rf, Sequence) and isinstance(v_args_rf, Sequence):
+            # TODO: We just ignore `n` when both are sequences?
+
+            if type(u_args_rf) != type(v_args_rf):
+                return
+
+            if no_ident and unify(u_args_rf, v_args_rf, S) is not False:
+                return
+
+            op_pred = partial(equal, op_rf)
+            u_args_flat = type(u_args_rf)(flatten_assoc_args(op_pred, u_args_rf))
+            v_args_flat = type(v_args_rf)(flatten_assoc_args(op_pred, v_args_rf))
+
+            if len(u_args_flat) == len(v_args_flat):
+                g = inner_eq(u_args_flat, v_args_flat)
+            else:
+                if len(u_args_flat) < len(v_args_flat):
+                    sm_args, lg_args = u_args_flat, v_args_flat
+                else:
+                    sm_args, lg_args = v_args_flat, u_args_flat
+
+                grp_sizes = len(lg_args) - len(sm_args) + 1
+                assoc_terms = assoc_args(
+                    op_rf, lg_args, grp_sizes, ctor=type(u_args_rf)
+                )
+
+                g = condeseq([inner_eq(sm_args, a_args)] for a_args in assoc_terms)
+
+            yield from goaleval(g)(S)
+
+        elif isinstance(u_args_rf, Sequence):
+            # TODO: We really need to know the arity (ranges) for the operator
+            # in order to make good choices here.
+            # For instance, does `(op, 1, 2) == (op, (op, 1, 2))` make sense?
+            # If so, the lower-bound on this range should actually be `1`.
+            if len(u_args_rf) == 1:
+                if not no_ident and (n_rf == 1 or n_rf is None):
+                    g = inner_eq(u_args_rf, v_args_rf)
+                else:
+                    return
+            else:
+
+                u_args_flat = list(flatten_assoc_args(partial(equal, op_rf), u_args_rf))
+
+                if n_rf is not None:
+                    arg_sizes = [n_rf]
+                else:
+                    arg_sizes = range(2, len(u_args_flat) + (not no_ident))
+
+                v_ac_args = (
+                    v_ac_arg
+                    for n_i in arg_sizes
+                    for v_ac_arg in assoc_args(
+                        op_rf, u_args_flat, n_i, ctor=type(u_args_rf)
+                    )
+                    if not no_ident or v_ac_arg != u_args_rf
+                )
+                g = condeseq([inner_eq(v_args_rf, v_ac_arg)] for v_ac_arg in v_ac_args)
+
+            yield from goaleval(g)(S)
+
+    return lall(
+        ground_order((a_args, b_args), (u_args, v_args)),
+        itero(u_args, nullo_refs=(v_args,), default_ConsNull=null_type),
+        eq_assoc_args_goal,
+    )
 
 
-def partition(tup, part):
-    """Partition a tuple.
-
-    >>> from kanren.assoccomm import partition
-    >>> partition("abcde", [[0,1], [4,3,2]])
-    [('a', 'b'), ('e', 'd', 'c')]
-    """
-    return [index(tup, ind) for ind in part]
-
-
-def groupsizes_to_partition(*gsizes):
-    """Create a list of ranges from their sizes.
-
-    >>> from kanren.assoccomm import groupsizes_to_partition
-    >>> groupsizes_to_partition(2, 3)
-    [[0, 1], [2, 3, 4]]
-    """
-    idx = 0
-    part = []
-    for gs in gsizes:
-        l_ = []
-        for i in range(gs):
-            l_.append(idx)
-            idx += 1
-        part.append(l_)
-    return part
-
-
-def eq_assoc(u, v, eq=core.eq, n=None):
-    """Create a goal for associative equality.
+def eq_assoc(u, v, n=None, op_predicate=associative, null_type=etuple):
+    """Create a goal for associative unification of two terms.
 
     >>> from kanren import run, var, fact
     >>> from kanren.assoccomm import eq_assoc as eq
@@ -153,28 +201,14 @@ def eq_assoc(u, v, eq=core.eq, n=None):
     >>> run(0, x, eq(('add', 1, 2, 3), ('add', 1, x)))
     (('add', 2, 3),)
     """
-    uop, _ = op_args(u)
-    vop, _ = op_args(v)
-    if uop and vop:
-        return conde(
-            [(core.eq, u, v)],
-            [(eq, uop, vop), (associative, uop), lambda s: assocunify(u, v, s, eq, n)],
-        )
 
-    if uop or vop:
+    def assoc_args_unique(a, b, op, **kwargs):
+        return eq_assoc_args(op, a, b, no_ident=True, null_type=null_type)
 
-        if vop:
-            uop, vop = vop, uop
-            v, u = u, v
-        return conde(
-            [(core.eq, u, v)],
-            [(associative, uop), lambda s: assocunify(u, v, s, eq, n)],
-        )
-
-    return (core.eq, u, v)
+    return term_walko(op_predicate, assoc_args_unique, u, v, n=n)
 
 
-def eq_comm(u, v, inner_eq=None):
+def eq_comm(u, v, op_predicate=commutative, null_type=etuple):
     """Create a goal for commutative equality.
 
     >>> from kanren import run, var, fact
@@ -188,88 +222,37 @@ def eq_comm(u, v, inner_eq=None):
     >>> run(0, x, eq(('add', 1, 2, 3), ('add', 2, x, 1)))
     (3,)
     """
-    inner_eq = inner_eq or eq_comm
-    vtail, vhead = var(), var()
 
-    if isvar(u) and isvar(v):
-        return eq(u, v)
+    def permuteo_unique(x, y, op, **kwargs):
+        return permuteo(x, y, no_ident=True, default_ConsNull=null_type)
 
-    uop, uargs = op_args(u)
-    vop, vargs = op_args(v)
-
-    if not uop and not vop:
-        return eq(u, v)
-
-    if vop and not uop:
-        uop, uargs = vop, vargs
-        v, u = u, v
-
-    return (
-        conde,
-        [eq(u, v)],
-        [
-            (buildo, vhead, vtail, v),
-            (
-                conde,
-                [
-                    (inner_eq, uop, vhead),
-                    (mapo, lambda a, b: (eq_comm, a, b, inner_eq), uargs, vtail),
-                ],
-                [
-                    eq(uop, vhead),
-                    (commutative, uop),
-                    (permuteq, uargs, vtail, inner_eq),
-                ],
-            ),
-        ],
-    )
+    return term_walko(op_predicate, permuteo_unique, u, v)
 
 
-def buildo(op, args, obj):
-    """Construct a goal that relates an object to its op and args.
+def assoc_flatten(a, a_flat):
+    def assoc_flatten_goal(S):
+        nonlocal a, a_flat
 
-    For example, in `add(1,2,3)`, `add` is the op and `(1,2,3)` are the args.
+        a_rf = reify(a, S)
 
-    Checks op_regsitry for functions to define op/arg relationships
-    """
-    if not isvar(obj):
-        oop, oargs = op_args(obj)
-        # TODO: Is greedy correct?
-        return lallgreedy((eq, op, oop), (eq, args, oargs))
-    else:
-        try:
-            return eq(obj, build(op, args))
-        except TypeError:
-            raise EarlyGoalError()
-    raise EarlyGoalError()
+        if isinstance(a_rf, Sequence) and (a_rf[0],) in associative.facts:
 
+            def op_pred(sub_op):
+                nonlocal S
+                sub_op_rf = reify(sub_op, S)
+                return sub_op_rf == a_rf[0]
 
-def build(op, args):
-    try:
-        return term(op, args)
-    except NotImplementedError:
-        raise EarlyGoalError()
+            a_flat_rf = type(a_rf)(flatten_assoc_args(op_pred, a_rf))
+        else:
+            a_flat_rf = a_rf
+
+        yield from eq(a_flat, a_flat_rf)(S)
+
+    return assoc_flatten_goal
 
 
-def op_args(x):
-    """Break apart x into an operation and tuple of args."""
-    if isvar(x):
-        return None, None
-    try:
-        return operator(x), arguments(x)
-    except (ConsError, NotImplementedError):
-        return None, None
-
-
-def eq_assoccomm(u, v):
-    """Construct a goal for associative and commutative eq.
-
-    Works like logic.core.eq but supports associative/commutative expr trees
-
-    tree-format:  (op, *args)
-    example:      (add, 1, 2, 3)
-
-    State that operations are associative or commutative with relations
+def eq_assoccomm(u, v, null_type=etuple):
+    """Construct a goal for associative and commutative unification.
 
     >>> from kanren.assoccomm import eq_assoccomm as eq
     >>> from kanren.assoccomm import commutative, associative
@@ -282,33 +265,31 @@ def eq_assoccomm(u, v):
     >>> e1 = ('add', 1, 2, 3)
     >>> e2 = ('add', 1, x)
     >>> run(0, x, eq(e1, e2))
-    (('add', 2, 3), ('add', 3, 2))
+    (('add', 3, 2), ('add', 2, 3))
     """
-    uop, uargs = op_args(u)
-    vop, vargs = op_args(v)
 
-    if uop and not vop and not isvar(v):
-        return fail
-    if vop and not uop and not isvar(u):
-        return fail
-    if uop and vop and uop != vop:
-        return fail
-    if uop and not (uop,) in associative.facts:
-        return (eq, u, v)
-    if vop and not (vop,) in associative.facts:
-        return (eq, u, v)
+    def eq_assoccomm_step(a, b, op):
+        z = var()
+        return lall(
+            # Permute
+            conde(
+                [
+                    commutative(op),
+                    permuteo(a, z, no_ident=True, default_ConsNull=etuple),
+                ],
+                [eq(a, z)],
+            ),
+            # Generate associative combinations
+            conde(
+                [associative(op), eq_assoc_args(op, z, b, no_ident=True)], [eq(z, b)]
+            ),
+        )
 
-    if uop and vop:
-        u, v = (u, v) if len(uargs) >= len(vargs) else (v, u)
-        n = min(map(len, (uargs, vargs)))  # length of shorter tail
-    else:
-        n = None
-    if vop and not uop:
-        u, v = v, u
-    w = var()
-    # TODO: Is greedy correct?
-    return (
-        lallgreedy,
-        (eq_assoc, u, w, eq_assoccomm, n),
-        (eq_comm, v, w, eq_assoccomm),
+    return term_walko(
+        lambda x: succeed,
+        eq_assoccomm_step,
+        u,
+        v,
+        format_step=assoc_flatten,
+        no_ident=False,
     )
