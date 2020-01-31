@@ -1,25 +1,22 @@
-import collections
-
+from operator import length_hint
+from functools import partial
 from itertools import permutations
+from collections import Counter
 from collections.abc import Sequence
 
 from cons import cons
 from cons.core import ConsNull, ConsPair
 from unification import isvar, reify, var
+from unification.core import isground
 
 from .core import (
     eq,
     EarlyGoalError,
     conde,
-    condeseq,
-    lany,
-    lallgreedy,
     lall,
-    fail,
-    success,
+    lanyseq,
     goaleval,
 )
-from .util import unique
 
 
 def heado(head, coll):
@@ -49,7 +46,7 @@ def conso(h, t, l):
     return eq(cons(h, t), l)
 
 
-def nullo(*args, default_ConsNull=list):
+def nullo(*args, refs=None, default_ConsNull=list):
     """Create a goal asserting that one or more terms are a/the same `ConsNull` type.
 
     `ConsNull` types return proper Python collections when used as a CDR value
@@ -62,19 +59,34 @@ def nullo(*args, default_ConsNull=list):
     walking distinct lists that do not necessarily terminate on the same
     iteration.
 
-    Unground logic variables will be set to the value of the `default_ConsNull` kwarg.
+    Parameters
+    ----------
+    args: tuple of objects
+        The terms to consider as an instance of the `ConsNull` type
+    refs: tuple of objects
+        The terms to use as reference types.  These are not unified with the
+        `ConsNull` type, instead they are used to constrain the `ConsNull`
+        types considered valid.
+    default_ConsNull: type
+        The sequence type to use when all logic variables are unground.
+
     """
 
-    def eqnullo_goal(s):
+    def nullo_goal(s):
 
         nonlocal args, default_ConsNull
+
+        if refs is not None:
+            refs_rf = reify(refs, s)
+        else:
+            refs_rf = ()
 
         args_rf = reify(args, s)
 
         arg_null_types = set(
             # Get an empty instance of the type
             type(a)
-            for a in args_rf
+            for a in args_rf + refs_rf
             # `ConsPair` and `ConsNull` types that are not literally `ConsPair`s
             if isinstance(a, (ConsPair, ConsNull)) and not issubclass(type(a), ConsPair)
         )
@@ -92,10 +104,10 @@ def nullo(*args, default_ConsNull=list):
 
         yield from goaleval(g)(s)
 
-    return eqnullo_goal
+    return nullo_goal
 
 
-def itero(l, default_ConsNull=list):
+def itero(l, nullo_refs=None, default_ConsNull=list):
     """Construct a goal asserting that a term is an iterable type.
 
     This is a generic version of the standard `listo` that accounts for
@@ -105,11 +117,11 @@ def itero(l, default_ConsNull=list):
     """
 
     def itero_goal(S):
-        nonlocal l
+        nonlocal l, nullo_refs, default_ConsNull
         l_rf = reify(l, S)
         c, d = var(), var()
         g = conde(
-            [nullo(l_rf, default_ConsNull=default_ConsNull)],
+            [nullo(l_rf, refs=nullo_refs, default_ConsNull=default_ConsNull)],
             [conso(c, d, l_rf), itero(d, default_ConsNull=default_ConsNull)],
         )
         yield from goaleval(g)(S)
@@ -117,82 +129,209 @@ def itero(l, default_ConsNull=list):
     return itero_goal
 
 
-def permuteq(a, b, eq2=eq):
-    """Construct a goal asserting equality under permutation.
+def membero(x, ls):
+    """Construct a goal stating that x is an item of coll."""
 
-    For example, (1, 2, 2) equates to (2, 1, 2) under permutation
-    >>> from kanren import var, run, permuteq
-    >>> x = var()
-    >>> run(0, x, permuteq(x, (1, 2)))
-    ((1, 2), (2, 1))
+    def membero_goal(S):
+        nonlocal x, ls
 
-    >>> run(0, x, permuteq((2, 1, x), (2, 1, 2)))
-    (2,)
+        x_rf, ls_rf = reify((x, ls), S)
+        a, d = var(), var()
+
+        g = lall(conso(a, d, ls), conde([eq(a, x)], [membero(x, d)]))
+
+        yield from goaleval(g)(S)
+
+    return membero_goal
+
+
+def appendo(l, s, out, default_ConsNull=list):
+    """Construct a goal for the relation l + s = ls.
+
+    See Byrd thesis pg. 247
+    https://scholarworks.iu.edu/dspace/bitstream/handle/2022/8777/Byrd_indiana_0093A_10344.pdf
     """
-    if isinstance(a, Sequence) and isinstance(b, Sequence):
-        if len(a) != len(b):
-            return fail
-        elif collections.Counter(a) == collections.Counter(b):
-            return success
-        else:
-            c, d = list(a), list(b)
-            for x in list(c):
-                # TODO: This is quadratic in the number items in the sequence.
-                # Need something like a multiset. Maybe use
-                # collections.Counter?
-                try:
-                    d.remove(x)
-                    c.remove(x)
-                except ValueError:
-                    pass
 
-            if len(c) == 1:
-                return (eq2, c[0], d[0])
-            return condeseq(
-                ((eq2, x, d[0]), (permuteq, c[0:i] + c[i + 1 :], d[1:], eq2))
-                for i, x in enumerate(c)
-            )
-    elif not (isinstance(a, Sequence) or isinstance(b, Sequence)):
-        raise ValueError(
-            "Neither a nor b is a Sequence: {}, {}".format(type(a), type(b))
+    def appendo_goal(S):
+        nonlocal l, s, out
+
+        l_rf, s_rf, out_rf = reify((l, s, out), S)
+
+        a, d, res = var(prefix="a"), var(prefix="d"), var(prefix="res")
+
+        _nullo = partial(nullo, default_ConsNull=default_ConsNull)
+
+        g = conde(
+            [
+                # All empty
+                _nullo(s_rf, l_rf, out_rf),
+            ],
+            [
+                # `l` is empty
+                conso(a, d, out_rf),
+                eq(s_rf, out_rf),
+                _nullo(l_rf, refs=(s_rf, out_rf)),
+            ],
+            [
+                conso(a, d, l_rf),
+                conso(a, res, out_rf),
+                appendo(d, s_rf, res, default_ConsNull=default_ConsNull),
+            ],
         )
 
-    if isvar(a) and isvar(b):
-        raise EarlyGoalError()
+        yield from goaleval(g)(S)
 
-    if isvar(a) or isvar(b):
-        if isinstance(b, Sequence):
-            c, d = a, b
-        elif isinstance(a, Sequence):
-            c, d = b, a
-
-        return (condeseq, ([eq(c, perm)] for perm in unique(permutations(d, len(d)))))
+    return appendo_goal
 
 
-def seteq(a, b, eq2=eq):
-    """Construct a goal asserting set equality.
+def rembero(x, l, o, default_ConsNull=list):
+    """Remove the first occurrence of `x` in `l` resulting in `o`."""
 
-    For example (1, 2, 3) set equates to (2, 1, 3)
+    from .constraints import neq
 
-    >>> from kanren import var, run, seteq
+    def rembero_goal(s):
+        nonlocal x, l, o
+
+        x_rf, l_rf, o_rf = reify((x, l, o), s)
+
+        l_car, l_cdr, r = var(), var(), var()
+
+        g = conde(
+            [nullo(l_rf, o_rf, default_ConsNull=default_ConsNull),],
+            [conso(l_car, l_cdr, l_rf), eq(x_rf, l_car), eq(l_cdr, o_rf),],
+            [
+                conso(l_car, l_cdr, l_rf),
+                neq(l_car, x),
+                conso(l_car, r, o_rf),
+                rembero(x_rf, l_cdr, r, default_ConsNull=default_ConsNull),
+            ],
+        )
+
+        yield from goaleval(g)(s)
+
+    return rembero_goal
+
+
+def permuteo(a, b, inner_eq=eq, default_ConsNull=list, no_ident=False):
+    """Construct a goal asserting equality or sequences under permutation.
+
+    For example, (1, 2, 2) equates to (2, 1, 2) under permutation
+    >>> from kanren import var, run, permuteo
     >>> x = var()
-    >>> run(0, x, seteq(x, (1, 2)))
+    >>> run(0, x, permuteo(x, (1, 2)))
     ((1, 2), (2, 1))
 
-    >>> run(0, x, seteq((2, 1, x), (3, 1, 2)))
-    (3,)
+    >>> run(0, x, permuteo((2, 1, x), (2, 1, 2)))
+    (2,)
     """
-    ts = lambda x: tuple(set(x))
-    if not isvar(a) and not isvar(b):
-        return permuteq(ts(a), ts(b), eq2)
-    elif not isvar(a):
-        return permuteq(ts(a), b, eq2)
-    else:  # not isvar(b)
-        return permuteq(a, ts(b), eq2)
+
+    def permuteo_goal(S):
+        nonlocal a, b, default_ConsNull, inner_eq
+
+        a_rf, b_rf = reify((a, b), S)
+
+        # If the lengths differ, then fail
+        a_len, b_len = length_hint(a_rf, -1), length_hint(b_rf, -1)
+        if a_len > 0 and b_len > 0 and a_len != b_len:
+            return
+
+        if isinstance(a_rf, Sequence):
+
+            a_type = type(a_rf)
+
+            a_perms = permutations(a_rf)
+
+            if no_ident:
+                next(a_perms)
+
+            if isinstance(b_rf, Sequence):
+
+                b_type = type(b_rf)
+
+                # Fail on mismatched types or straight equality (when
+                # `no_ident` is enabled)
+                if a_type != b_type or (no_ident and a_rf == b_rf):
+                    return
+
+                try:
+                    # `a` and `b` are sequences, so let's see if we can pull out
+                    # all the (hash-)equivalent elements.
+                    # XXX: Use of this requires that the equivalence relation
+                    # implied by `inner_eq` be a *superset* of `eq`.
+
+                    cntr_a, cntr_b = Counter(a_rf), Counter(b_rf)
+                    rdcd_a, rdcd_b = cntr_a - cntr_b, cntr_b - cntr_a
+
+                    if len(rdcd_a) == len(rdcd_b) == 0:
+                        yield S
+                        return
+                    elif len(rdcd_a) < len(cntr_a):
+                        a_rf, b_rf = tuple(rdcd_a.elements()), b_type(rdcd_b.elements())
+                        a_perms = permutations(a_rf)
+
+                except TypeError:
+                    # TODO: We could probably get more coverage for this case
+                    # by using `HashableForm`.
+                    pass
+
+                # If they're both ground and we're using basic unification,
+                # then simply check that one is a permutation of the other and
+                # be done.  No need to create and evaluate a bunch of goals in
+                # order to do something that can be done right here.
+                # Naturally, this assumes that the `isground` checks aren't
+                # nearly as costly as all that other stuff.  If the gains
+                # depend on the sizes of `a` and `b`, then we could do
+                # `length_hint` checks first.
+                if inner_eq == eq and isground(a_rf, S) and isground(b_rf, S):
+                    if tuple(b_rf) in a_perms:
+                        yield S
+                        return
+                    else:
+                        # This has to be a definitive check, since we can only
+                        # use the `a_perms` generator once; plus, we don't want
+                        # to iterate over it more than once!
+                        return
+
+            yield from lanyseq(inner_eq(b_rf, a_type(i)) for i in a_perms)(S)
+
+        elif isinstance(b_rf, Sequence):
+
+            b_type = type(b_rf)
+            b_perms = permutations(b_rf)
+
+            if no_ident:
+                next(b_perms)
+
+            yield from lanyseq(inner_eq(a_rf, b_type(i)) for i in b_perms)(S)
+
+        else:
+
+            # None of the arguments are proper sequences, so state that one
+            # should be and apply `permuteo` to that.
+
+            a_itero_g = itero(
+                a_rf, nullo_refs=(b_rf,), default_ConsNull=default_ConsNull
+            )
+
+            for S_new in a_itero_g(S):
+                a_new = reify(a_rf, S_new)
+                a_type = type(a_new)
+                a_perms = permutations(a_new)
+
+                if no_ident:
+                    next(a_perms)
+
+                yield from lanyseq(inner_eq(b_rf, a_type(i)) for i in a_perms)(S_new)
+
+    return permuteo_goal
+
+
+# For backward compatibility
+permuteq = permuteo
 
 
 def goalify(func, name=None):  # pragma: noqa
-    """Convert Python function into kanren goal.
+    """Convert a Python function into kanren goal.
 
     >>> from kanren import run, goalify, var, membero
     >>> typo = goalify(type)
@@ -223,31 +362,3 @@ def goalify(func, name=None):  # pragma: noqa
     funco.__name__ = name
 
     return funco
-
-
-def membero(x, coll):
-    """Construct a goal stating that x is an item of coll."""
-    if not isvar(coll):
-        return (lany,) + tuple((eq, x, item) for item in coll)
-    raise EarlyGoalError()
-
-
-def appendo(l, s, ls, base_type=tuple):
-    """Construct a goal stating ls = l + s.
-
-    See Byrd thesis pg. 247
-    https://scholarworks.iu.edu/dspace/bitstream/handle/2022/8777/Byrd_indiana_0093A_10344.pdf
-
-    Parameters
-    ----------
-    base_type: type
-        The empty collection type to use when all terms are logic variables.
-    """
-    if all(map(isvar, (l, s, ls))):
-        raise EarlyGoalError()
-    a, d, res = [var() for i in range(3)]
-    return (
-        lany,
-        (lallgreedy, (eq, l, base_type()), (eq, s, ls)),
-        (lall, (conso, a, d, l), (conso, a, res, ls), (appendo, d, s, res)),
-    )

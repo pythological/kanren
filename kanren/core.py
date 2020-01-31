@@ -1,16 +1,20 @@
-import itertools as it
+from itertools import tee
 from functools import partial
-from .util import dicthash, interleave, take, multihash, unique, evalt
-from toolz import groupby, map
+from collections.abc import Sequence
 
-from unification import reify, unify
+from toolz import groupby, map
+from cons.core import ConsPair
+from unification import reify, unify, isvar
+from unification.core import isground
+
+from .util import dicthash, interleave, take, multihash, unique, evalt
 
 
 def fail(s):
     return iter(())
 
 
-def success(s):
+def succeed(s):
     return iter((s,))
 
 
@@ -49,21 +53,12 @@ def lall(*goals):
 def lallgreedy(*goals):
     """Construct a logical all that greedily evaluates each goals in the order provided.
 
-    Note that this may raise EarlyGoalError when the ordering of the
-    goals is incorrect. It is faster than lall, but should be used
-    with care.
+    Note that this may raise EarlyGoalError when the ordering of the goals is
+    incorrect. It is faster than lall, but should be used with care.
 
-    >>> from kanren import eq, run, membero, var
-    >>> x, y = var('x'), var('y')
-    >>> run(0, x, lallgreedy((eq, y, set([1]))), (membero, x, y))
-    (1,)
-    >>> run(0, x, lallgreedy((membero, x, y), (eq, y, {1})))  # doctest: +SKIP
-    Traceback (most recent call last):
-      ...
-    kanren.core.EarlyGoalError
     """
     if not goals:
-        return success
+        return succeed
     if len(goals) == 1:
         return goals[0]
 
@@ -80,18 +75,9 @@ def lallgreedy(*goals):
 
 
 def lallfirst(*goals):
-    """Construct a logical all that runs goals one at a time.
-
-    >>> from kanren import membero, var
-    >>> x = var('x')
-    >>> g = lallfirst(membero(x, (1,2,3)), membero(x, (2,3,4)))
-    >>> tuple(g({}))
-    ({~x: 2}, {~x: 3})
-    >>> tuple(lallfirst()({}))
-    ({},)
-    """
+    """Construct a logical all that runs goals one at a time."""
     if not goals:
-        return success
+        return succeed
     if len(goals) == 1:
         return goals[0]
 
@@ -116,14 +102,7 @@ def lallfirst(*goals):
 
 
 def lany(*goals):
-    """Construct a logical any goal.
-
-    >>> from kanren import lany, membero, var
-    >>> x = var('x')
-    >>> g = lany(membero(x, (1,2,3)), membero(x, (2,3,4)))
-    >>> tuple(g({}))
-    ({~x: 1}, {~x: 2}, {~x: 3}, {~x: 4})
-    """
+    """Construct a logical any goal."""
     if len(goals) == 1:
         return goals[0]
     return lanyseq(goals)
@@ -182,7 +161,7 @@ def lanyseq(goals):
     """Construct a logical any with a possibly infinite number of goals."""
 
     def anygoal(s):
-        anygoal.goals, local_goals = it.tee(anygoal.goals)
+        anygoal.goals, local_goals = tee(anygoal.goals)
 
         def f(goals):
             for goal in goals:
@@ -210,7 +189,63 @@ def everyg(predicate, coll):
     return (lall,) + tuple((predicate, x) for x in coll)
 
 
-def run(n, x, *goals):
+def ground_order_key(S, x):
+    if isvar(x):
+        return 2
+    elif isground(x, S):
+        return -1
+    elif issubclass(type(x), ConsPair):
+        return 1
+    else:
+        return 0
+
+
+def ground_order(in_args, out_args):
+    """Construct a non-relational goal that orders a list of terms based on groundedness (grounded precede ungrounded)."""
+
+    def ground_order_goal(S):
+        nonlocal in_args, out_args
+
+        in_args_rf, out_args_rf = reify((in_args, out_args), S)
+
+        S_new = unify(
+            list(out_args_rf) if isinstance(out_args_rf, Sequence) else out_args_rf,
+            sorted(in_args_rf, key=partial(ground_order_key, S)),
+            S,
+        )
+
+        if S_new is not False:
+            yield S_new
+
+    return ground_order_goal
+
+
+def ifa(g1, g2):
+    """Create a goal operator that returns the first stream unless it fails."""
+
+    def ifa_goal(S):
+        g1_stream = goaleval(g1)(S)
+        S_new = next(g1_stream, None)
+
+        if S_new is None:
+            yield from goaleval(g2)(S)
+        else:
+            yield S_new
+            yield from g1_stream
+
+    return ifa_goal
+
+
+def Zzz(gctor, *args, **kwargs):
+    """Create an inverse-η-delay for a goal."""
+
+    def Zzz_goal(S):
+        yield from goaleval(gctor(*args, **kwargs))(S)
+
+    return Zzz_goal
+
+
+def run_all(n, x, *goals, results_filter=None):
     """Run a logic program and obtain n solutions that satisfy the given goals.
 
     >>> from kanren import run, var, eq
@@ -231,7 +266,12 @@ def run(n, x, *goals):
         (i.e. `lall`).
     """
     results = map(partial(reify, x), goaleval(lall(*goals))({}))
-    return take(n, unique(results, key=multihash))
+    if results_filter is not None:
+        results = results_filter(results)
+    return take(n, results)
+
+
+run = partial(run_all, results_filter=partial(unique, key=multihash))
 
 
 class EarlyGoalError(Exception):
@@ -287,3 +327,24 @@ def goaleval(goal):
     if isinstance(goal, tuple):  # goal is not yet evaluated like (eq, x, 1)
         return find_fixed_point(evalt, goal)
     raise TypeError("Expected either function or tuple")
+
+
+def dbgo(*args, msg=None):  # pragma: no cover
+    """Construct a goal that sets a debug trace and prints reified arguments."""
+    from pprint import pprint
+
+    def dbgo_goal(S):
+        nonlocal args
+        args = reify(args, S)
+
+        if msg is not None:
+            print(msg)
+
+        pprint(args)
+
+        import pdb
+
+        pdb.set_trace()
+        yield S
+
+    return dbgo_goal

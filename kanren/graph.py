@@ -5,9 +5,9 @@ from unification import reify
 
 from cons.core import ConsError
 
-from etuples import apply, rands, rator
+from etuples import etuple, apply, rands, rator
 
-from .core import eq, conde, lall, goaleval
+from .core import eq, conde, lall, goaleval, succeed, Zzz, fail, ground_order
 from .goals import conso, nullo
 
 
@@ -57,10 +57,27 @@ def applyo(o_rator, o_rands, obj):
     return applyo_goal
 
 
-def map_anyo(relation, l_in, l_out, null_type=list):
-    """Apply a relation to corresponding elements in two sequences and succeed if at least one pair succeeds.
+def mapo(relation, a, b, null_type=list, null_res=True, first=True):
+    """Apply a relation to corresponding elements in two sequences and succeed if the relation succeeds for all pairs."""
 
-    Empty `l_in` and/or `l_out` will fail--i.e. `relation` must succeed *at least once*.
+    b_car, b_cdr = var(), var()
+    a_car, a_cdr = var(), var()
+
+    return conde(
+        [nullo(a, b, default_ConsNull=null_type) if (not first or null_res) else fail],
+        [
+            conso(a_car, a_cdr, a),
+            conso(b_car, b_cdr, b),
+            Zzz(relation, a_car, b_car),
+            Zzz(mapo, relation, a_cdr, b_cdr, null_type=null_type, first=False),
+        ],
+    )
+
+
+def map_anyo(
+    relation, a, b, null_type=list, null_res=False, first=True, any_succeed=False
+):
+    """Apply a relation to corresponding elements in two sequences and succeed if at least one pair succeeds.
 
     Parameters
     ----------
@@ -70,69 +87,59 @@ def map_anyo(relation, l_in, l_out, null_type=list):
        inputs, or defaults to an empty list.
     """
 
-    def _map_anyo(relation, l_in, l_out, i_any):
-        def map_anyo_goal(s):
+    b_car, b_cdr = var(), var()
+    a_car, a_cdr = var(), var()
 
-            nonlocal relation, l_in, l_out, i_any, null_type
-
-            l_in_rf, l_out_rf = reify((l_in, l_out), s)
-
-            i_car, i_cdr = var(), var()
-            o_car, o_cdr = var(), var()
-
-            conde_branches = []
-
-            if i_any or (isvar(l_in_rf) and isvar(l_out_rf)):
-                # Consider terminating the sequences when we've had at least
-                # one successful goal or when both sequences are logic variables.
-                conde_branches.append(
-                    [nullo(l_in_rf, l_out_rf, default_ConsNull=null_type)]
-                )
-
-            # Extract the CAR and CDR of each argument sequence; this is how we
-            # iterate through elements of the two sequences.
-            cons_parts_branch = [
-                goaleval(conso(i_car, i_cdr, l_in_rf)),
-                goaleval(conso(o_car, o_cdr, l_out_rf)),
-            ]
-
-            conde_branches.append(cons_parts_branch)
-
-            conde_relation_branches = []
-
-            relation_branch = [
-                # This case tries the relation and continues on.
-                relation(i_car, o_car),
-                # In this conde clause, we can tell future calls to
-                # `map_anyo` that we've had at least one successful
-                # application of the relation (otherwise, this clause
-                # would fail due to the above goal).
-                _map_anyo(relation, i_cdr, o_cdr, True),
-            ]
-
-            conde_relation_branches.append(relation_branch)
-
-            base_branch = [
-                # This is the "base" case; it is used when, for example,
-                # the given relation isn't satisfied.
-                eq(i_car, o_car),
-                _map_anyo(relation, i_cdr, o_cdr, i_any),
-            ]
-
-            conde_relation_branches.append(base_branch)
-
-            cons_parts_branch.append(conde(*conde_relation_branches))
-
-            g = conde(*conde_branches)
-
-            yield from goaleval(g)(s)
-
-        return map_anyo_goal
-
-    return _map_anyo(relation, l_in, l_out, False)
+    return conde(
+        [
+            nullo(a, b, default_ConsNull=null_type)
+            if (any_succeed or (first and null_res))
+            else fail
+        ],
+        [
+            conso(a_car, a_cdr, a),
+            conso(b_car, b_cdr, b),
+            conde(
+                [
+                    Zzz(relation, a_car, b_car),
+                    Zzz(
+                        map_anyo,
+                        relation,
+                        a_cdr,
+                        b_cdr,
+                        null_type=null_type,
+                        any_succeed=True,
+                        first=False,
+                    ),
+                ],
+                [
+                    eq(a_car, b_car),
+                    Zzz(
+                        map_anyo,
+                        relation,
+                        a_cdr,
+                        b_cdr,
+                        null_type=null_type,
+                        any_succeed=any_succeed,
+                        first=False,
+                    ),
+                ],
+            ),
+        ],
+    )
 
 
-def reduceo(relation, in_term, out_term):
+def vararg_success(*args):
+    return succeed
+
+
+def eq_length(u, v, default_ConsNull=list):
+    """Construct a goal stating that two sequences are the same length and type."""
+
+    return mapo(vararg_success, u, v, null_type=default_ConsNull)
+
+
+def reduceo(relation, in_term, out_term, *args, **kwargs):
     """Relate a term and the fixed-point of that term under a given relation.
 
     This includes the "identity" relation.
@@ -140,7 +147,7 @@ def reduceo(relation, in_term, out_term):
 
     def reduceo_goal(s):
 
-        nonlocal in_term, out_term, relation
+        nonlocal in_term, out_term, relation, args, kwargs
 
         in_term_rf, out_term_rf = reify((in_term, out_term), s)
 
@@ -152,7 +159,7 @@ def reduceo(relation, in_term, out_term):
         is_expanding = isvar(in_term_rf)
 
         # One application of the relation assigned to `term_rdcd`
-        single_apply_g = relation(in_term_rf, term_rdcd)
+        single_apply_g = relation(in_term_rf, term_rdcd, *args, **kwargs)
 
         # Assign/equate (unify, really) the result of a single application to
         # the "output" term.
@@ -160,7 +167,7 @@ def reduceo(relation, in_term, out_term):
 
         # Recurse into applications of the relation (well, produce a goal that
         # will do that)
-        another_apply_g = reduceo(relation, term_rdcd, out_term_rf)
+        another_apply_g = reduceo(relation, term_rdcd, out_term_rf, *args, **kwargs)
 
         # We want the fixed-point value to show up in the stream output
         # *first*, but that requires some checks.
@@ -188,7 +195,14 @@ def reduceo(relation, in_term, out_term):
     return reduceo_goal
 
 
-def walko(goal, graph_in, graph_out, rator_goal=None, null_type=False):
+def walko(
+    goal,
+    graph_in,
+    graph_out,
+    rator_goal=None,
+    null_type=etuple,
+    map_rel=partial(map_anyo, null_res=True),
+):
     """Apply a binary relation between all nodes in two graphs.
 
     When `rator_goal` is used, the graphs are treated as term graphs, and the
@@ -210,30 +224,35 @@ def walko(goal, graph_in, graph_out, rator_goal=None, null_type=False):
     null_type: type
         The collection type used when it is not fully determined by the graph
         arguments.
+    map_rel: callable
+        The map relation used to apply `goal` to a sub-graph.
     """
 
     def walko_goal(s):
 
-        nonlocal goal, rator_goal, graph_in, graph_out, null_type
+        nonlocal goal, rator_goal, graph_in, graph_out, null_type, map_rel
 
         graph_in_rf, graph_out_rf = reify((graph_in, graph_out), s)
 
         rator_in, rands_in, rator_out, rands_out = var(), var(), var(), var()
 
-        _walko = partial(walko, goal, rator_goal=rator_goal, null_type=null_type)
+        _walko = partial(
+            walko, goal, rator_goal=rator_goal, null_type=null_type, map_rel=map_rel
+        )
 
         g = conde(
+            # TODO: Use `Zzz`, if needed.
             [goal(graph_in_rf, graph_out_rf),],
             [
                 lall(
                     applyo(rator_in, rands_in, graph_in_rf),
                     applyo(rator_out, rands_out, graph_out_rf),
                     rator_goal(rator_in, rator_out),
-                    map_anyo(_walko, rands_in, rands_out, null_type=null_type),
+                    map_rel(_walko, rands_in, rands_out, null_type=null_type),
                 )
                 if rator_goal is not None
                 else lall(
-                    map_anyo(_walko, graph_in_rf, graph_out_rf, null_type=null_type)
+                    map_rel(_walko, graph_in_rf, graph_out_rf, null_type=null_type)
                 ),
             ],
         )
@@ -241,3 +260,69 @@ def walko(goal, graph_in, graph_out, rator_goal=None, null_type=False):
         yield from goaleval(g)(s)
 
     return walko_goal
+
+
+def term_walko(
+    rator_goal,
+    rands_goal,
+    a,
+    b,
+    null_type=etuple,
+    no_ident=False,
+    format_step=None,
+    **kwargs
+):
+    """Construct a goal for walking a term graph.
+
+    This implementation is somewhat specific to the needs of `eq_comm` and
+    `eq_assoc`, but it could be transferred to `kanren.graph`.
+
+    XXX: Make sure `rator_goal` will succeed for unground logic variables;
+    otherwise, this will diverge.
+    XXX: `rands_goal` should not be contain `eq`, i.e. `rands_goal(x, x)`
+    should always fail!
+    """
+
+    def single_step(s, t):
+        u, v = var(), var()
+        u_rator, u_rands = var(), var()
+        v_rands = var()
+
+        return lall(
+            ground_order((s, t), (u, v)),
+            applyo(u_rator, u_rands, u),
+            applyo(u_rator, v_rands, v),
+            rator_goal(u_rator),
+            # These make sure that there are at least two rands, which
+            # makes sense for commutativity and associativity, at least.
+            conso(var(), var(), u_rands),
+            conso(var(), var(), v_rands),
+            Zzz(rands_goal, u_rands, v_rands, u_rator, **kwargs),
+        )
+
+    def term_walko_step(s, t):
+        nonlocal rator_goal, rands_goal, null_type
+        u, v = var(), var()
+        z, w = var(), var()
+
+        return lall(
+            ground_order((s, t), (u, v)),
+            format_step(u, w) if format_step is not None else eq(u, w),
+            conde(
+                [
+                    # Apply, then walk or return
+                    single_step(w, v),
+                ],
+                [
+                    # Walk, then apply or return
+                    map_anyo(term_walko_step, w, z, null_type=null_type),
+                    conde([eq(z, v)], [single_step(z, v)]),
+                ],
+            ),
+        )
+
+    return lall(
+        term_walko_step(a, b)
+        if no_ident
+        else conde([term_walko_step(a, b)], [eq(a, b)]),
+    )

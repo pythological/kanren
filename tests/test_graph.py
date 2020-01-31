@@ -4,7 +4,7 @@ from operator import add, mul
 from functools import partial
 from math import log, exp
 
-from unification import var, unify
+from unification import var, unify, isvar, reify
 
 from etuples.dispatch import rator, rands, apply
 from etuples.core import etuple, ExpressionTuple
@@ -13,7 +13,7 @@ from cons import cons
 
 from kanren import run, eq, conde, lall
 from kanren.constraints import isinstanceo
-from kanren.graph import applyo, reduceo, map_anyo, walko
+from kanren.graph import applyo, reduceo, map_anyo, walko, mapo, eq_length
 
 
 class OrderedFunction(object):
@@ -147,6 +147,52 @@ def test_reduceo():
     assert res[1] == etuple(log, etuple(exp, etuple(log, etuple(exp, 1))))
 
 
+def test_mapo():
+    q_lv = var()
+
+    def blah(x, y):
+        return conde([eq(x, 1), eq(y, "a")], [eq(x, 3), eq(y, "b")])
+
+    assert run(0, q_lv, mapo(blah, [], q_lv)) == ([],)
+    assert run(0, q_lv, mapo(blah, [1, 2, 3], q_lv)) == ()
+    assert run(0, q_lv, mapo(blah, [1, 1, 3], q_lv)) == (["a", "a", "b"],)
+    assert run(0, q_lv, mapo(blah, q_lv, ["a", "a", "b"])) == ([1, 1, 3],)
+
+    exp_res = (
+        [[], []],
+        [[1], ["a"]],
+        [[3], ["b"]],
+        [[1, 1], ["a", "a"]],
+        [[3, 1], ["b", "a"]],
+    )
+
+    a_lv = var()
+    assert run(5, [q_lv, a_lv], mapo(blah, q_lv, a_lv)) == exp_res
+
+
+def test_eq_length():
+    q_lv = var()
+
+    res = run(0, q_lv, eq_length([1, 2, 3], q_lv))
+    assert len(res) == 1 and len(res[0]) == 3 and all(isvar(q) for q in res[0])
+
+    res = run(0, q_lv, eq_length(q_lv, [1, 2, 3]))
+    assert len(res) == 1 and len(res[0]) == 3 and all(isvar(q) for q in res[0])
+
+    res = run(0, q_lv, eq_length(cons(1, q_lv), [1, 2, 3]))
+    assert len(res) == 1 and len(res[0]) == 2 and all(isvar(q) for q in res[0])
+
+    v_lv = var()
+    res = run(3, (q_lv, v_lv), eq_length(q_lv, v_lv, default_ConsNull=tuple))
+    assert len(res) == 3 and all(
+        isinstance(a, tuple)
+        and len(a) == len(b)
+        and (len(a) == 0 or a != b)
+        and all(isvar(r) for r in a)
+        for a, b in res
+    )
+
+
 def test_map_anyo_types():
     """Make sure that `applyo` preserves the types between its arguments."""
     q_lv = var()
@@ -195,6 +241,30 @@ def test_map_anyo_misc():
 
     test_res = run(4, q_lv, map_anyo(math_reduceo, q_lv, var("z"), tuple))
     assert all(isinstance(r, tuple) for r in test_res)
+
+    x, y, z = var(), var(), var()
+
+    def test_bin(a, b):
+        return conde([eq(a, 1), eq(b, 2)])
+
+    res = run(10, (x, y), map_anyo(test_bin, x, y, null_type=tuple))
+    exp_res_form = (
+        ((1,), (2,)),
+        ((x, 1), (x, 2)),
+        ((1, 1), (2, 2)),
+        ((x, y, 1), (x, y, 2)),
+        ((1, x), (2, x)),
+        ((x, 1, 1), (x, 2, 2)),
+        ((1, 1, 1), (2, 2, 2)),
+        ((x, y, z, 1), (x, y, z, 2)),
+        ((1, x, 1), (2, x, 2)),
+        ((x, 1, y), (x, 2, y)),
+    )
+
+    for a, b in zip(res, exp_res_form):
+        s = unify(a, b)
+        assert s is not False
+        assert all(isvar(i) for i in reify((x, y, z), s))
 
 
 @pytest.mark.parametrize(
