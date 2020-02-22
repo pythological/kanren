@@ -16,10 +16,10 @@ setup(
     packages=["kanren"],
     install_requires=[
         "toolz",
-        "cons",
+        "cons >= 0.4.0",
         "multipledispatch",
-        "etuples >= 0.1.1",
-        "logical-unification >= 0.3.2",
+        "etuples >= 0.3.1",
+        "logical-unification >= 0.4.1",
     ],
     tests_require=["pytest", "sympy"],
     long_description=open("README.md").read() if exists("README.md") else "",

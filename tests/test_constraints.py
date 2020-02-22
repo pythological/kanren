@@ -2,8 +2,8 @@ from pytest import raises
 
 from itertools import permutations
 
-from unification import var, unify
-from unification.core import _reify
+from unification import var, unify, reify
+from unification.core import _reify, stream_eval
 
 from cons import cons
 
@@ -90,8 +90,8 @@ def test_reify():
     assert repr(ConstrainedVar(var_a, ks)) == "~a: {neq {1, 2}}"
 
     # TODO: Make this work with `reify` when `var('a')` isn't in `ks`.
-    assert isinstance(_reify(var_a, ks), ConstrainedVar)
-    assert repr(_reify(var_a, ks)) == "~a: {neq {1, 2}}"
+    assert isinstance(reify(var_a, ks), ConstrainedVar)
+    assert repr(stream_eval(_reify(var_a, ks))) == "~a: {neq {1, 2}}"
 
 
 def test_ConstraintStore():
@@ -116,7 +116,7 @@ def test_ConstrainedVar():
     assert a_clv in {a_lv}
 
 
-def test_disequality():
+def test_disequality_basic():
 
     a_lv, b_lv = var(), var()
 
@@ -164,6 +164,10 @@ def test_disequality():
     res = list(lconj(eq(a_lv, 1), neq(a_lv, 1))({}))
     assert res == []
 
+
+def test_disequality():
+
+    a_lv, b_lv = var(), var()
     q_lv, c_lv = var(), var()
 
     goal_sets = [
@@ -203,17 +207,16 @@ def test_disequality():
         for goal_ord in permutations(goal):
 
             res = list(lconj(*goal_ord)({}))
-            assert len(res) == num_results
+            assert len(res) == num_results, (i, goal_ord)
 
             res = list(lconj(*goal_ord)(ConstrainedState()))
-            assert len(res) == num_results
+            assert len(res) == num_results, (i, goal_ord)
 
-            assert len(run(0, q_lv, *goal_ord)) == num_results
+            assert len(run(0, q_lv, *goal_ord)) == num_results, (i, goal_ord)
 
 
-def test_typeo():
-
-    a_lv, b_lv, q_lv = var(), var(), var()
+def test_typeo_basic():
+    a_lv, q_lv = var(), var()
 
     assert run(0, q_lv, typeo(q_lv, int)) == (q_lv,)
     assert run(0, q_lv, typeo(1, int)) == (q_lv,)
@@ -230,17 +233,20 @@ def test_typeo():
     with raises(ValueError):
         run(0, q_lv, typeo(a_lv, str), typeo(a_lv, int))
 
+
+def test_typeo():
+    a_lv, b_lv, q_lv = var(), var(), var()
+
     goal_sets = [
         # Logic variable instance type that's immediately ground in another
         # goal
         ([typeo(q_lv, int), eq(q_lv, 1)], (1,)),
         # Use an unhashable constrained term
         ([typeo(q_lv, list), eq(q_lv, [])], ([],)),
-        # A constraint parameter that is never ground
+        # TODO: A constraint parameter that is never ground
         # ([typeo(a_lv, q_lv), eq(a_lv, 1)], (int,)),
         # A non-ground, non-logic variable instance argument that changes type
         # when ground
-        # NOTE: We can't do that until we have/use a proper "is ground" check
         ([typeo(cons(1, a_lv), list), eq(a_lv, [])], (q_lv,)),
         # Logic variable instance and type arguments
         ([typeo(q_lv, int), eq(b_lv, 1), eq(b_lv, q_lv)], (1,)),
@@ -270,15 +276,14 @@ def test_typeo():
         ([typeo(a_lv, tuple), eq([(b_lv,)], a_lv)], ()),
     ]
 
-    for goal, expected in goal_sets:
+    for i, (goal, expected) in enumerate(goal_sets):
         for goal_ord in permutations(goal):
             res = run(0, q_lv, *goal_ord)
-            assert res == expected
+            assert res == expected, (i, goal_ord)
 
 
-def test_instanceo():
-
-    b_lv, q_lv = var(), var()
+def test_instanceo_basic():
+    q_lv = var()
 
     assert run(0, q_lv, isinstanceo(q_lv, int)) == (q_lv,)
     assert run(0, q_lv, isinstanceo(1, int)) == (q_lv,)
@@ -291,6 +296,10 @@ def test_instanceo():
     assert run(0, q_lv, isinstanceo("hi", str)) == (q_lv,)
     # Invalid second arg type (i.e. not a type)
     assert run(0, q_lv, isinstanceo(1, 1)) == ()
+
+
+def test_instanceo():
+    b_lv, q_lv = var(), var()
 
     goal_sets = [
         # Logic variable instance type that's immediately ground in another
@@ -341,4 +350,4 @@ def test_instanceo():
     for i, (goal, expected) in enumerate(goal_sets):
         for goal_ord in permutations(goal):
             res = run(0, q_lv, *goal_ord)
-            assert res == expected
+            assert res == expected, (i, goal_ord)

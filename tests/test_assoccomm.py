@@ -6,7 +6,7 @@ from etuples.core import etuple
 
 from cons import cons
 
-from unification import reify, var, variables, isvar, unify
+from unification import reify, var, isvar, unify
 
 from kanren.core import goaleval, run_all as run
 from kanren.facts import fact
@@ -569,10 +569,3 @@ def test_assoccomm_objects():
     assert run(0, True, eq_assoccomm(add(1, 2, 3), add(3, 1, 2))) == (True,)
     assert run(0, x, eq_assoccomm(add(1, 2, 3), add(1, 2, x))) == (3,)
     assert run(0, x, eq_assoccomm(add(1, 2, 3), add(x, 2, 1))) == (3,)
-
-    v = add(1, 2, 3)
-    with variables(v):
-        x = add(5, 6)
-        # TODO: There are two more cases here, but they're in tuple form.
-        # See `test_eq_comm_object`.
-        assert x in run(0, v, eq_assoccomm(v, x))
