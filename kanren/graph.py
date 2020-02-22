@@ -3,58 +3,11 @@ from functools import partial
 from unification import var, isvar
 from unification import reify
 
-from cons.core import ConsError
+from etuples import etuple
 
-from etuples import etuple, apply, rands, rator
-
-from .core import eq, conde, lall, goaleval, succeed, Zzz, fail, ground_order
+from .core import eq, conde, lall, succeed, Zzz, fail, ground_order
 from .goals import conso, nullo
-
-
-def applyo(o_rator, o_rands, obj):
-    """Construct a goal that relates an object to the application of its (ope)rator to its (ope)rands.
-
-    In other words, this is the relation `op(*args) == obj`.  It uses the
-    `rator`, `rands`, and `apply` dispatch functions from `etuples`, so
-    implement/override those to get the desired behavior.
-
-    """
-
-    def applyo_goal(S):
-        nonlocal o_rator, o_rands, obj
-
-        o_rator_rf, o_rands_rf, obj_rf = reify((o_rator, o_rands, obj), S)
-
-        if not isvar(obj_rf):
-
-            # We should be able to use this goal with *any* arguments, so
-            # fail when the ground operations fail/err.
-            try:
-                obj_rator, obj_rands = rator(obj_rf), rands(obj_rf)
-            except (ConsError, NotImplementedError):
-                return
-
-            # The object's rator + rands should be the same as the goal's
-            yield from goaleval(
-                lall(eq(o_rator_rf, obj_rator), eq(o_rands_rf, obj_rands))
-            )(S)
-
-        elif isvar(o_rands_rf) or isvar(o_rator_rf):
-            # The object and at least one of the rand, rators is a logic
-            # variable, so let's just assert a `cons` relationship between
-            # them
-            yield from goaleval(conso(o_rator_rf, o_rands_rf, obj_rf))(S)
-        else:
-            # The object is a logic variable, but the rator and rands aren't.
-            # We assert that the object is the application of the rand and
-            # rators.
-            try:
-                obj_applied = apply(o_rator_rf, o_rands_rf)
-            except (ConsError, NotImplementedError):
-                return
-            yield from eq(obj_rf, obj_applied)(S)
-
-    return applyo_goal
+from .term import applyo
 
 
 def mapo(relation, a, b, null_type=list, null_res=True, first=True):
@@ -189,7 +142,6 @@ def reduceo(relation, in_term, out_term, *args, **kwargs):
             # the first result
             g = lall(single_apply_g, conde([another_apply_g], [single_res_g]))
 
-        g = goaleval(g)
         yield from g(s)
 
     return reduceo_goal
@@ -251,13 +203,11 @@ def walko(
                     map_rel(_walko, rands_in, rands_out, null_type=null_type),
                 )
                 if rator_goal is not None
-                else lall(
-                    map_rel(_walko, graph_in_rf, graph_out_rf, null_type=null_type)
-                ),
+                else map_rel(_walko, graph_in_rf, graph_out_rf, null_type=null_type),
             ],
         )
 
-        yield from goaleval(g)(s)
+        yield from g(s)
 
     return walko_goal
 

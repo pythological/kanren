@@ -1,10 +1,58 @@
 from collections.abc import Sequence, Mapping
 
-from unification.core import _unify, _reify, construction_sentinel
+from unification.core import reify, _unify, _reify, construction_sentinel
+from unification.variable import isvar
 
-from cons.core import cons
+from cons.core import cons, ConsError
 
-from etuples import rator as operator, rands as arguments, apply as term
+from etuples import apply as term, rands as arguments, rator as operator
+
+from .core import eq, lall
+from .goals import conso
+
+
+def applyo(o_rator, o_rands, obj):
+    """Construct a goal that relates an object to the application of its (ope)rator to its (ope)rands.
+
+    In other words, this is the relation `op(*args) == obj`.  It uses the
+    `rator`, `rands`, and `apply` dispatch functions from `etuples`, so
+    implement/override those to get the desired behavior.
+
+    """
+
+    def applyo_goal(S):
+        nonlocal o_rator, o_rands, obj
+
+        o_rator_rf, o_rands_rf, obj_rf = reify((o_rator, o_rands, obj), S)
+
+        if not isvar(obj_rf):
+
+            # We should be able to use this goal with *any* arguments, so
+            # fail when the ground operations fail/err.
+            try:
+                obj_rator, obj_rands = operator(obj_rf), arguments(obj_rf)
+            except (ConsError, NotImplementedError):
+                return
+
+            # The object's rator + rands should be the same as the goal's
+            yield from lall(eq(o_rator_rf, obj_rator), eq(o_rands_rf, obj_rands))(S)
+
+        elif isvar(o_rands_rf) or isvar(o_rator_rf):
+            # The object and at least one of the rand, rators is a logic
+            # variable, so let's just assert a `cons` relationship between
+            # them
+            yield from conso(o_rator_rf, o_rands_rf, obj_rf)(S)
+        else:
+            # The object is a logic variable, but the rator and rands aren't.
+            # We assert that the object is the application of the rand and
+            # rators.
+            try:
+                obj_applied = term(o_rator_rf, o_rands_rf)
+            except (ConsError, NotImplementedError):
+                return
+            yield from eq(obj_rf, obj_applied)(S)
+
+    return applyo_goal
 
 
 @term.register(object, Sequence)

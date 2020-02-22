@@ -4,6 +4,25 @@
 
 Logic/relational programming in Python with [miniKanren](http://minikanren.org/).
 
+## Installation
+
+Using `pip`:
+```bash
+pip install miniKanren
+```
+
+To install from source:
+```bash
+git clone git@github.com:pythological/kanren.git
+cd kanren
+pip install -r requirements.txt
+```
+
+Tests can be run with the provided `Makefile`:
+```bash
+make check
+```
+
 ## Motivation
 
 Logic programming is a general programming paradigm.  This implementation however came about specifically to serve as an algorithmic core for Computer Algebra Systems in Python and for the automated generation and optimization of numeric software.  Domain specific languages, code generation, and compilers have recently been a hot topic in the Scientific Python community.  `kanren` aims to be a low-level core for these projects.
@@ -111,25 +130,6 @@ We can express the grandfather relationship as a distinct relation by creating a
 ## Extending `kanren`
 
 `kanren` uses [`multipledispatch`](http://github.com/mrocklin/multipledispatch/) and the [`logical-unification` library](https://github.com/pythological/unification) to support pattern matching on user defined types.  Essentially, types that can be unified can be used with most `kanren` goals.  See the [`logical-unification` project's examples](https://github.com/pythological/unification#examples) for demonstrations of how arbitrary types can be made unifiable.
-
-## Installation
-
-Using `pip`:
-```bash
-pip install miniKanren
-```
-
-To install from source:
-```bash
-git clone git@github.com:pythological/kanren.git
-cd kanren
-pip install -r requirements.txt
-```
-
-Tests can be run with the provided `Makefile`:
-```bash
-make check
-```
 
 ## About
 

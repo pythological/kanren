@@ -14,7 +14,6 @@ from .goals import (
     permuteo,
     permuteq,
     membero,
-    goalify,
 )
 from .facts import Relation, fact, facts
 from .term import arguments, operator, term, unifiable_with_term

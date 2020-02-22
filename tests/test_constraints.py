@@ -9,7 +9,7 @@ from cons import cons
 
 from kanren import run, eq, conde
 from kanren.goals import membero
-from kanren.core import lall, goaleval
+from kanren.core import lconj
 from kanren.constraints import (
     ConstrainedState,
     DisequalityStore,
@@ -18,10 +18,6 @@ from kanren.constraints import (
     typeo,
     isinstanceo,
 )
-
-
-def lconj(*goals):
-    return goaleval(lall(*goals))
 
 
 def test_ConstrainedState():

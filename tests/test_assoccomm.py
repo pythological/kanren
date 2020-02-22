@@ -8,7 +8,7 @@ from cons import cons
 
 from unification import reify, var, isvar, unify
 
-from kanren.core import goaleval, run_all as run
+from kanren.core import run
 from kanren.facts import fact
 from kanren.assoccomm import (
     associative,
@@ -18,7 +18,6 @@ from kanren.assoccomm import (
     eq_assoc,
     eq_assoccomm,
     assoc_args,
-    buildo,
     op_args,
     flatten_assoc_args,
     assoc_flatten,
@@ -82,27 +81,13 @@ def operator_Node(n):
 def results(g, s=None):
     if s is None:
         s = dict()
-    return tuple(goaleval(g)(s))
+    return tuple(g(s))
 
 
 def test_op_args():
     assert op_args(var()) == (None, None)
     assert op_args(add(1, 2, 3)) == (Add, (1, 2, 3))
     assert op_args("foo") == (None, None)
-
-
-def test_buildo():
-    x = var()
-    assert run(0, x, buildo("add", (1, 2, 3), x)) == (("add", 1, 2, 3),)
-    assert run(0, x, buildo(x, (1, 2, 3), ("add", 1, 2, 3))) == ("add",)
-    assert run(0, x, buildo("add", x, ("add", 1, 2, 3))) == ((1, 2, 3),)
-
-
-def test_buildo_object():
-    x = var()
-    assert run(0, x, buildo(Add, (1, 2, 3), x)) == (add(1, 2, 3),)
-    assert run(0, x, buildo(x, (1, 2, 3), add(1, 2, 3))) == (Add,)
-    assert run(0, x, buildo(Add, x, add(1, 2, 3))) == ((1, 2, 3),)
 
 
 def test_eq_comm():

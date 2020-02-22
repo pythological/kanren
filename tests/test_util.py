@@ -1,9 +1,7 @@
 from pytest import raises
 
 from kanren.util import (
-    take,
     unique,
-    interleave,
     intersection,
     groupsizes,
     dicthash,
@@ -43,18 +41,6 @@ def test_intersection():
     a, b, c = (1, 2, 3, 4), (2, 3, 4, 5), (3, 4, 5, 6)
 
     assert tuple(intersection(a, b, c)) == (3, 4)
-
-
-def test_take():
-    assert take(2, range(5)) == (0, 1)
-    assert take(0, range(5)) == (0, 1, 2, 3, 4)
-    seq = range(5)
-    assert take(None, seq) == seq
-
-
-def test_interleave():
-    assert "".join(interleave(("ABC", "123"))) == "A1B2C3"
-    assert "".join(interleave(("ABC", "1"))) == "A1BC"
 
 
 def test_groupsizes():

@@ -46,7 +46,7 @@ docstyle:
 
 format:
 	@printf "Checking code style with black...\n"
-	black --check kanren/
+	black --check kanren/ tests/
 	@printf "\033[1;34mBlack passes!\033[0m\n\n"
 
 style:

@@ -1,4 +1,4 @@
-from itertools import chain, islice
+from itertools import chain
 from collections import namedtuple
 from collections.abc import Hashable, MutableSet, Set, Mapping, Iterable
 
@@ -151,44 +151,6 @@ def unique(seq, key=lambda x: x):
         elif k not in seen:
             seen.add(key(item))
             yield item
-
-
-def interleave(seqs, pass_exceptions=()):
-    iters = map(iter, seqs)
-    while iters:
-        newiters = []
-        for itr in iters:
-            try:
-                yield next(itr)
-                newiters.append(itr)
-            except (StopIteration,) + tuple(pass_exceptions):
-                pass
-        iters = newiters
-
-
-def take(n, seq):
-    if n is None:
-        return seq
-    if n == 0:
-        return tuple(seq)
-    return tuple(islice(seq, 0, n))
-
-
-def evalt(t):
-    """Evaluate a tuple if unevaluated.
-
-    >>> from kanren.util import evalt
-    >>> add = lambda x, y: x + y
-    >>> evalt((add, 2, 3))
-    5
-    >>> evalt(add(2, 3))
-    5
-    """
-
-    if isinstance(t, tuple) and len(t) >= 1 and callable(t[0]):
-        return t[0](*t[1:])
-    else:
-        return t
 
 
 def intersection(*seqs):
