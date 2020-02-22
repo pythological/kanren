@@ -10,6 +10,7 @@ from cons.core import ConsPair
 
 from unification import unify, reify, Var, var
 from unification.core import _reify, isground
+from unification.utils import transitive_get as walk
 
 from .util import FlexibleSet
 
@@ -185,12 +186,16 @@ class ConstrainedVar(Var):
         return hash((Var, self.token))
 
 
-def reify_ConstrainedState(u, S):
-    u_res = reify(u, S.data)
-    return ConstrainedVar(u_res, S)
+def _reify_ConstrainedState(u, S):
+    u_res = walk(u, S.data)
+
+    if u_res is u:
+        yield ConstrainedVar(u_res, S)
+    else:
+        yield _reify(u_res, S)
 
 
-_reify.add((Var, ConstrainedState), reify_ConstrainedState)
+_reify.add((Var, ConstrainedState), _reify_ConstrainedState)
 
 
 class DisequalityStore(ConstraintStore):
@@ -398,7 +403,7 @@ def typeo(u, u_type):
 
         u_rf, u_type_rf = reify((u, u_type), S)
 
-        if not isground(u_rf, S) or not isground(u_type, S):
+        if not isground(u_rf, S) or not isground(u_type_rf, S):
 
             if not isinstance(S, ConstrainedState):
                 S = ConstrainedState(S)
