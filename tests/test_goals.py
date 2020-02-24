@@ -16,13 +16,13 @@ from kanren.goals import (
     rembero,
     permuteo,
 )
-from kanren.core import eq, goaleval, run, conde
+from kanren.core import eq, run, conde
 
 
 def results(g, s=None):
     if s is None:
         s = dict()
-    return tuple(goaleval(g)(s))
+    return tuple(g(s))
 
 
 def test_heado():
@@ -31,17 +31,17 @@ def test_heado():
     assert (x, 1) in results(heado(1, (x, 2, 3)))[0].items()
     assert results(heado(x, ())) == ()
 
-    assert run(0, x, (heado, x, z), (conso, 1, y, z)) == (1,)
+    assert run(0, x, heado(x, z), conso(1, y, z)) == (1,)
 
 
 def test_tailo():
     x, y, z = var(), var(), var()
 
-    assert (x, (2, 3)) in results((tailo, x, (1, 2, 3)))[0].items()
-    assert (x, ()) in results((tailo, x, (1,)))[0].items()
-    assert results((tailo, x, ())) == ()
+    assert (x, (2, 3)) in results(tailo(x, (1, 2, 3)))[0].items()
+    assert (x, ()) in results(tailo(x, (1,)))[0].items()
+    assert results(tailo(x, ())) == ()
 
-    assert run(0, y, (tailo, y, z), (conso, x, (1, 2), z)) == ((1, 2),)
+    assert run(0, y, tailo(y, z), conso(x, (1, 2), z)) == ((1, 2),)
 
 
 def test_conso():
@@ -111,7 +111,7 @@ def test_membero():
     assert run(0, x, membero(1, (2, 3))) == ()
 
     g = membero(x, (0, 1, 2))
-    assert tuple(r[x] for r in goaleval(g)({})) == (0, 1, 2)
+    assert tuple(r[x] for r in g({})) == (0, 1, 2)
 
     def in_cons(x, y):
         if issubclass(type(y), ConsPair):
@@ -128,7 +128,7 @@ def test_membero():
 
 def test_uneval_membero():
     x, y = var(), var()
-    assert set(run(100, x, (membero, y, ((1, 2, 3), (4, 5, 6))), (membero, x, y))) == {
+    assert set(run(100, x, membero(y, ((1, 2, 3), (4, 5, 6))), membero(x, y))) == {
         1,
         2,
         3,

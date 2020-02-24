@@ -34,33 +34,20 @@ from collections.abc import Sequence
 
 from toolz import sliding_window
 
-from unification import isvar, var, reify, unify
+from unification import reify, unify, var
 
-from cons.core import ConsError, ConsPair, car, cdr
+from cons.core import ConsPair, car, cdr
 
 from etuples import etuple
 
-from .core import conde, condeseq, eq, goaleval, ground_order, lall, succeed
+from .core import conde, eq, ground_order, lall, succeed
 from .goals import itero, permuteo
 from .facts import Relation
-from .graph import applyo, term_walko
-from .term import term, operator, arguments
+from .graph import term_walko
+from .term import term
 
 associative = Relation("associative")
 commutative = Relation("commutative")
-
-# For backward compatibility
-buildo = applyo
-
-
-def op_args(x):
-    """Break apart x into an operation and tuple of args."""
-    if isvar(x):
-        return None, None
-    try:
-        return operator(x), arguments(x)
-    except (ConsError, NotImplementedError):
-        return None, None
 
 
 def flatten_assoc_args(op_predicate, items):
@@ -146,9 +133,9 @@ def eq_assoc_args(
                     op_rf, lg_args, grp_sizes, ctor=type(u_args_rf)
                 )
 
-                g = condeseq([inner_eq(sm_args, a_args)] for a_args in assoc_terms)
+                g = conde([inner_eq(sm_args, a_args)] for a_args in assoc_terms)
 
-            yield from goaleval(g)(S)
+            yield from g(S)
 
         elif isinstance(u_args_rf, Sequence):
             # TODO: We really need to know the arity (ranges) for the operator
@@ -177,9 +164,9 @@ def eq_assoc_args(
                     )
                     if not no_ident or v_ac_arg != u_args_rf
                 )
-                g = condeseq([inner_eq(v_args_rf, v_ac_arg)] for v_ac_arg in v_ac_args)
+                g = conde([inner_eq(v_args_rf, v_ac_arg)] for v_ac_arg in v_ac_args)
 
-            yield from goaleval(g)(S)
+            yield from g(S)
 
     return lall(
         ground_order((a_args, b_args), (u_args, v_args)),

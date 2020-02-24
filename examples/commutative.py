@@ -2,21 +2,26 @@ from kanren import run, var, fact
 from kanren.assoccomm import eq_assoccomm as eq
 from kanren.assoccomm import commutative, associative
 
+
 # Define some dummy Operationss
-add = 'add'
-mul = 'mul'
+add = "add"
+mul = "mul"
+
 # Declare that these ops are commutative using the facts system
 fact(commutative, mul)
 fact(commutative, add)
 fact(associative, mul)
 fact(associative, add)
 
-# Define some wild variables
-x, y = var('x'), var('y')
+# Define some logic variables
+x, y = var(), var()
 
 # Two expressions to match
-pattern = (mul, (add, 1, x), y)                # (1 + x) * y
-expr    = (mul, 2, (add, 3, 1))                # 2 * (3 + 1)
-print(run(0, (x,y), eq(pattern, expr)))        # prints ((3, 2),) meaning
-                                               #   x matches to 3
-                                               #   y matches to 2
+pattern = (mul, (add, 1, x), y)  # (1 + x) * y
+expr = (mul, 2, (add, 3, 1))  # 2 * (3 + 1)
+
+res = run(0, (x, y), eq(pattern, expr))
+print(res)
+# prints ((3, 2),) meaning
+#   x matches to 3
+#   y matches to 2

@@ -1,115 +1,165 @@
 from itertools import count
 
-from pytest import raises, mark
+from pytest import raises
+
+from collections.abc import Iterator
 
 from cons import cons
-from unification import var, isvar
+from unification import var
 
 from kanren.core import (
     run,
     fail,
     eq,
     conde,
-    goaleval,
+    lconj,
+    lconj_seq,
+    ldisj,
+    ldisj_seq,
     lany,
-    lallgreedy,
-    lanyseq,
-    earlyorder,
-    EarlyGoalError,
     lall,
-    earlysafe,
-    lallfirst,
-    condeseq,
     ifa,
+    succeed,
     ground_order,
 )
-from kanren.util import evalt
 
 
-def ege_membero(x, coll):
-    if not isvar(coll):
-        return (lany,) + tuple((eq, x, item) for item in coll)
-    raise EarlyGoalError()
+def results(g, s=None):
+    if s is None:
+        s = dict()
+    return tuple(g(s))
 
 
 def test_eq():
-    x = var("x")
+    x = var()
     assert tuple(eq(x, 2)({})) == ({x: 2},)
     assert tuple(eq(x, 2)({x: 3})) == ()
 
 
+def test_lconj_basics():
+
+    a, b = var(), var()
+    res = list(lconj(eq(1, a), eq(2, b))({}))
+    assert res == [{a: 1, b: 2}]
+
+    res = list(lconj(eq(1, a))({}))
+    assert res == [{a: 1}]
+
+    res = list(lconj_seq([])({}))
+    assert res == [{}]
+
+    res = list(lconj(eq(1, a), eq(2, a))({}))
+    assert res == []
+
+    res = list(lconj(eq(1, 2))({}))
+    assert res == []
+
+    res = list(lconj(eq(1, 1))({}))
+    assert res == [{}]
+
+    def gen():
+        for i in [succeed, succeed]:
+            yield i
+
+    res = list(lconj(gen())({}))
+    assert res == [{}]
+
+    def gen():
+        return
+
+    res = list(lconj_seq([gen()])({}))
+    assert res == []
+
+
+def test_ldisj_basics():
+
+    a = var()
+    res = list(ldisj(eq(1, a))({}))
+    assert res == [{a: 1}]
+
+    res = list(ldisj(eq(1, 2))({}))
+    assert res == []
+
+    res = list(ldisj(eq(1, 1))({}))
+    assert res == [{}]
+
+    res = list(ldisj(eq(1, a), eq(1, a))({}))
+    assert res == [{a: 1}, {a: 1}]
+
+    res = list(ldisj(eq(1, a), eq(2, a))({}))
+    assert res == [{a: 1}, {a: 2}]
+
+    res = list(ldisj_seq([])({}))
+    assert res == [{}]
+
+    def gen():
+        for i in [succeed, succeed]:
+            yield i
+
+    res = list(ldisj(gen())({}))
+    assert res == [{}, {}]
+
+
+def test_conde_basics():
+
+    a, b = var(), var()
+    res = list(conde([eq(1, a), eq(2, b)], [eq(1, b), eq(2, a)])({}))
+    assert res == [{a: 1, b: 2}, {b: 1, a: 2}]
+
+    res = list(conde([eq(1, a), eq(2, 1)], [eq(1, b), eq(2, a)])({}))
+    assert res == [{b: 1, a: 2}]
+
+    aa, ab, ba, bb, bc = var(), var(), var(), var(), var()
+    res = list(
+        conde(
+            [eq(1, a), conde([eq(11, aa)], [eq(12, ab)])],
+            [eq(1, b), conde([eq(111, ba), eq(112, bb)], [eq(121, bc)]),],
+        )({})
+    )
+    assert res == [
+        {a: 1, aa: 11},
+        {b: 1, ba: 111, bb: 112},
+        {a: 1, ab: 12},
+        {b: 1, bc: 121},
+    ]
+
+    res = list(conde([eq(1, 2)], [eq(1, 1)])({}))
+    assert res == [{}]
+
+    assert list(lconj(eq(1, 1))({})) == [{}]
+
+    res = list(lconj(conde([eq(1, 2)], [eq(1, 1)]))({}))
+    assert res == [{}]
+
+    res = list(lconj(conde([eq(1, 2)], [eq(1, 1)]), conde([eq(1, 2)], [eq(1, 1)]))({}))
+    assert res == [{}]
+
+
 def test_lany():
-    x = var("x")
+    x = var()
     assert len(tuple(lany(eq(x, 2), eq(x, 3))({}))) == 2
-    assert len(tuple(lany((eq, x, 2), (eq, x, 3))({}))) == 2
-
-    g = lany(ege_membero(x, (1, 2, 3)), ege_membero(x, (2, 3, 4)))
-    assert tuple(g({})) == ({x: 1}, {x: 2}, {x: 3}, {x: 4})
+    assert len(tuple(lany(eq(x, 2), eq(x, 3))({}))) == 2
 
 
-def test_lallfirst():
-    x = var("x")
-    g = lallfirst(ege_membero(x, (1, 2, 3)), ege_membero(x, (2, 3, 4)))
-    assert tuple(g({})) == ({x: 2}, {x: 3})
-    assert tuple(lallfirst()({})) == ({},)
-
-
-def test_lallgreedy():
-    x, y = var("x"), var("y")
-    assert run(0, x, lallgreedy((eq, y, set([1]))), (ege_membero, x, y)) == (1,)
-    with raises(EarlyGoalError):
-        run(0, x, lallgreedy((ege_membero, x, y), (eq, y, {1})))
-
-
-@mark.parametrize("lall_impl", [lallgreedy, lall, lallfirst])
-def test_lall(lall_impl):
-    """Test that all three implementations of lallgreedy behave identically for correctly ordered goals."""
-    x, y = var("x"), var("y")
-    assert results(lall_impl((eq, x, 2))) == ({x: 2},)
-    assert results(lall_impl((eq, x, 2), (eq, x, 3))) == ()
-    assert results(lall_impl()) == ({},)
-
-    assert run(0, x, lall_impl((eq, y, (1, 2)), (ege_membero, x, y)))
-    assert run(0, x, lall_impl()) == (x,)
-    with raises(EarlyGoalError):
-        run(0, x, lall_impl(ege_membero(x, y)))
-
-
-@mark.parametrize("lall_impl", [lall, lallfirst])
-def test_safe_reordering_lall(lall_impl):
-    x, y = var("x"), var("y")
-    assert run(0, x, lall_impl((ege_membero, x, y), (eq, y, (1, 2)))) == (1, 2)
-
-
-def test_earlysafe():
-    x, y = var("x"), var("y")
-    assert earlysafe((eq, 2, 2))
-    assert earlysafe((eq, 2, 3))
-    assert earlysafe((ege_membero, x, (1, 2, 3)))
-    assert not earlysafe((ege_membero, x, y))
-
-
-def test_earlyorder():
-    x, y = var(), var()
-    assert earlyorder((eq, 2, x)) == ((eq, 2, x),)
-    assert earlyorder((eq, 2, x), (eq, 3, x)) == ((eq, 2, x), (eq, 3, x))
-    assert earlyorder((ege_membero, x, y), (eq, y, (1, 2, 3)))[0] == (eq, y, (1, 2, 3))
+def test_lall():
+    x = var()
+    assert results(lall(eq(x, 2))) == ({x: 2},)
+    assert results(lall(eq(x, 2), eq(x, 3))) == ()
+    assert results(lall()) == ({},)
+    assert run(0, x, lall()) == (x,)
 
 
 def test_conde():
-    x = var("x")
+    x = var()
     assert results(conde([eq(x, 2)], [eq(x, 3)])) == ({x: 2}, {x: 3})
     assert results(conde([eq(x, 2), eq(x, 3)])) == ()
 
-
-def test_condeseq():
-    x = var("x")
-    assert set(run(0, x, condeseq(([eq(x, 2)], [eq(x, 3)])))) == {2, 3}
-    assert set(run(0, x, condeseq([[eq(x, 2), eq(x, 3)]]))) == set()
+    assert set(run(0, x, conde([eq(x, 2)], [eq(x, 3)]))) == {2, 3}
+    assert set(run(0, x, conde([eq(x, 2), eq(x, 3)]))) == set()
 
     goals = ([eq(x, i)] for i in count())  # infinite number of goals
-    assert run(1, x, condeseq(goals)) == (0,)
-    assert run(1, x, condeseq(goals)) == (1,)
+    assert run(1, x, conde(goals)) == (0,)
+    assert run(1, x, conde(goals)) == (1,)
 
 
 def test_short_circuit():
@@ -121,7 +171,10 @@ def test_short_circuit():
 
 
 def test_run():
-    x, y, z = map(var, "xyz")
+    x, y, z = var(), var(), var()
+    res = run(None, x, eq(x, 1))
+    assert isinstance(res, Iterator)
+    assert tuple(res) == (1,)
     assert run(1, x, eq(x, 1)) == (1,)
     assert run(2, x, eq(x, 1)) == (1,)
     assert run(0, x, eq(x, 1)) == (1,)
@@ -135,98 +188,33 @@ def test_run_output_reify():
 
 
 def test_lanyseq():
-    x = var("x")
-    g = lanyseq(((eq, x, i) for i in range(3)))
-    assert list(goaleval(g)({})) == [{x: 0}, {x: 1}, {x: 2}]
-    assert list(goaleval(g)({})) == [{x: 0}, {x: 1}, {x: 2}]
+    x = var()
+    g = lany((eq(x, i) for i in range(3)))
+    assert list(g({})) == [{x: 0}, {x: 1}, {x: 2}]
+    assert list(g({})) == [{x: 0}, {x: 1}, {x: 2}]
 
     # Test lanyseq with an infinite number of goals.
-    assert set(run(3, x, lanyseq(((eq, x, i) for i in count())))) == {0, 1, 2}
-    assert set(run(3, x, (lanyseq, ((eq, x, i) for i in count())))) == {0, 1, 2}
-
-
-def test_evalt():
-    add = lambda x, y: x + y
-    assert evalt((add, 2, 3)) == 5
-    assert evalt(add(2, 3)) == 5
-    assert evalt((1, 2)) == (1, 2)
-
-
-def test_goaleval():
-    x, y = var("x"), var("y")
-    g = eq(x, 2)
-    assert goaleval(g) == g
-    assert callable(goaleval((eq, x, 2)))
-    with raises(EarlyGoalError):
-        goaleval((ege_membero, x, y))
-    assert callable(goaleval((lallgreedy, (eq, x, 2))))
+    assert set(run(3, x, lany((eq(x, i) for i in count())))) == {0, 1, 2}
+    assert set(run(3, x, lany((eq(x, i) for i in count())))) == {0, 1, 2}
 
 
 def test_lall_errors():
-    """Make sure we report the originating exception when it isn't just an
-    `EarlyGoalError`.
-    """
-
     class SomeException(Exception):
         pass
 
     def bad_relation():
-        def _bad_relation():
+        def _bad_relation(s):
             raise SomeException("some exception")
 
-        return (lall, (_bad_relation,))
+        return lall(_bad_relation)
 
     with raises(SomeException):
-        run(0, var(), (bad_relation,))
-
-
-def test_lany_is_early_safe():
-    x, y = var(), var()
-    assert run(0, x, lany((ege_membero, x, y), (eq, x, 2))) == (2,)
-
-
-def results(g, s=None):
-    if s is None:
-        s = dict()
-    return tuple(goaleval(g)(s))
+        run(0, var(), bad_relation())
 
 
 def test_dict():
     x = var()
     assert run(0, x, eq({1: x}, {1: 2})) == (2,)
-
-
-def test_goal_ordering():
-    # Regression test for https://github.com/logpy/logpy/issues/58
-
-    def lefto(q, p, lst):
-        if isvar(lst):
-            raise EarlyGoalError()
-        return ege_membero((q, p), zip(lst, lst[1:]))
-
-    vals = var()
-
-    # Verify the solution can be computed when we specify the execution
-    # ordering.
-    rules_greedy = (
-        lallgreedy,
-        (eq, (var(), var()), vals),
-        (lefto, "green", "white", vals),
-    )
-
-    (solution,) = run(1, vals, rules_greedy)
-    assert solution == ("green", "white")
-
-    # Verify that attempting to compute the "safe" order does not itself cause
-    # the evaluation to fail.
-    rules_greedy = (
-        lall,
-        (eq, (var(), var()), vals),
-        (lefto, "green", "white", vals),
-    )
-
-    (solution,) = run(1, vals, rules_greedy)
-    assert solution == ("green", "white")
 
 
 def test_ifa():
@@ -261,5 +249,7 @@ def test_ground_order():
     assert run(0, (a, b, c), ground_order((y, [1, z], 1), (a, b, c))) == (
         (1, [1, z], y),
     )
-    assert run(0, z, ground_order([cons(x, y), (x, y)], z)) == ([(x, y), cons(x, y)],)
-    assert run(0, z, ground_order([(x, y), cons(x, y)], z)) == ([(x, y), cons(x, y)],)
+    res = run(0, z, ground_order([cons(x, y), (x, y)], z))
+    assert res == ([(x, y), cons(x, y)],)
+    res = run(0, z, ground_order([(x, y), cons(x, y)], z))
+    assert res == ([(x, y), cons(x, y)],)

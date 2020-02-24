@@ -6,16 +6,14 @@ from collections.abc import Sequence
 
 from cons import cons
 from cons.core import ConsNull, ConsPair
-from unification import isvar, reify, var
+from unification import reify, var
 from unification.core import isground
 
 from .core import (
     eq,
-    EarlyGoalError,
     conde,
     lall,
-    lanyseq,
-    goaleval,
+    lany,
 )
 
 
@@ -102,7 +100,7 @@ def nullo(*args, refs=None, default_ConsNull=list):
 
         g = lall(*[eq(a, null_type()) for a in args_rf])
 
-        yield from goaleval(g)(s)
+        yield from g(s)
 
     return nullo_goal
 
@@ -124,7 +122,7 @@ def itero(l, nullo_refs=None, default_ConsNull=list):
             [nullo(l_rf, refs=nullo_refs, default_ConsNull=default_ConsNull)],
             [conso(c, d, l_rf), itero(d, default_ConsNull=default_ConsNull)],
         )
-        yield from goaleval(g)(S)
+        yield from g(S)
 
     return itero_goal
 
@@ -140,7 +138,7 @@ def membero(x, ls):
 
         g = lall(conso(a, d, ls), conde([eq(a, x)], [membero(x, d)]))
 
-        yield from goaleval(g)(S)
+        yield from g(S)
 
     return membero_goal
 
@@ -179,7 +177,7 @@ def appendo(l, s, out, default_ConsNull=list):
             ],
         )
 
-        yield from goaleval(g)(S)
+        yield from g(S)
 
     return appendo_goal
 
@@ -207,7 +205,7 @@ def rembero(x, l, o, default_ConsNull=list):
             ],
         )
 
-        yield from goaleval(g)(s)
+        yield from g(s)
 
     return rembero_goal
 
@@ -292,7 +290,7 @@ def permuteo(a, b, inner_eq=eq, default_ConsNull=list, no_ident=False):
                         # to iterate over it more than once!
                         return
 
-            yield from lanyseq(inner_eq(b_rf, a_type(i)) for i in a_perms)(S)
+            yield from lany(inner_eq(b_rf, a_type(i)) for i in a_perms)(S)
 
         elif isinstance(b_rf, Sequence):
 
@@ -302,7 +300,7 @@ def permuteo(a, b, inner_eq=eq, default_ConsNull=list, no_ident=False):
             if no_ident:
                 next(b_perms)
 
-            yield from lanyseq(inner_eq(a_rf, b_type(i)) for i in b_perms)(S)
+            yield from lany(inner_eq(a_rf, b_type(i)) for i in b_perms)(S)
 
         else:
 
@@ -321,44 +319,10 @@ def permuteo(a, b, inner_eq=eq, default_ConsNull=list, no_ident=False):
                 if no_ident:
                     next(a_perms)
 
-                yield from lanyseq(inner_eq(b_rf, a_type(i)) for i in a_perms)(S_new)
+                yield from lany(inner_eq(b_rf, a_type(i)) for i in a_perms)(S_new)
 
     return permuteo_goal
 
 
 # For backward compatibility
 permuteq = permuteo
-
-
-def goalify(func, name=None):  # pragma: noqa
-    """Convert a Python function into kanren goal.
-
-    >>> from kanren import run, goalify, var, membero
-    >>> typo = goalify(type)
-    >>> x = var('x')
-    >>> run(0, x, membero(x, (1, 'cat', 'hat', 2)), (typo, x, str))
-    ('cat', 'hat')
-
-    Goals go both ways.  Here are all of the types in the collection
-
-    >>> typ = var('typ')
-    >>> results = run(0, typ, membero(x, (1, 'cat', 'hat', 2)), (typo, x, typ))
-    >>> print([result.__name__ for result in results])
-    ['int', 'str']
-    """
-
-    def funco(inputs, out):  # pragma: noqa
-        if isvar(inputs):
-            raise EarlyGoalError()
-        else:
-            if isinstance(inputs, (tuple, list)):
-                if any(map(isvar, inputs)):
-                    raise EarlyGoalError()
-                return (eq, func(*inputs), out)
-            else:
-                return (eq, func(inputs), out)
-
-    name = name or (func.__name__ + "o")
-    funco.__name__ = name
-
-    return funco

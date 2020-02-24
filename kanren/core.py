@@ -1,13 +1,13 @@
 from itertools import tee
-from functools import partial
-from collections.abc import Sequence
+from operator import length_hint
+from functools import partial, reduce
+from collections.abc import Sequence, Generator
 
-from toolz import groupby, map
 from cons.core import ConsPair
 from unification import reify, unify, isvar
 from unification.core import isground
 
-from .util import dicthash, interleave, take, multihash, unique, evalt
+from toolz import interleave, take
 
 
 def fail(s):
@@ -26,167 +26,92 @@ def eq(u, v):
         unify
     """
 
-    def goal_eq(s):
-        result = unify(u, v, s)
-        if result is not False:
-            yield result
-
-    return goal_eq
-
-
-def lall(*goals):
-    """Construct a logical all with goal reordering to avoid EarlyGoalErrors.
-
-    See Also
-    --------
-        EarlyGoalError
-        earlyorder
-
-    >>> from kanren import lall, membero, var
-    >>> x = var('x')
-    >>> run(0, x, lall(membero(x, (1,2,3)), membero(x, (2,3,4))))
-    (2, 3)
-    """
-    return (lallgreedy,) + tuple(earlyorder(*goals))
-
-
-def lallgreedy(*goals):
-    """Construct a logical all that greedily evaluates each goals in the order provided.
-
-    Note that this may raise EarlyGoalError when the ordering of the goals is
-    incorrect. It is faster than lall, but should be used with care.
-
-    """
-    if not goals:
-        return succeed
-    if len(goals) == 1:
-        return goals[0]
-
-    def allgoal(s):
-        g = goaleval(reify(goals[0], s))
-        return unique(
-            interleave(
-                goaleval(reify((lallgreedy,) + tuple(goals[1:]), ss))(ss) for ss in g(s)
-            ),
-            key=dicthash,
-        )
-
-    return allgoal
-
-
-def lallfirst(*goals):
-    """Construct a logical all that runs goals one at a time."""
-    if not goals:
-        return succeed
-    if len(goals) == 1:
-        return goals[0]
-
-    def allgoal(s):
-        for i, g in enumerate(goals):
-            try:
-                goal = goaleval(reify(g, s))
-            except EarlyGoalError:
-                continue
-            other_goals = tuple(goals[:i] + goals[i + 1 :])
-            return unique(
-                interleave(
-                    goaleval(reify((lallfirst,) + other_goals, ss))(ss)
-                    for ss in goal(s)
-                ),
-                key=dicthash,
-            )
+    def eq_goal(s):
+        s = unify(u, v, s)
+        if s is not False:
+            return iter((s,))
         else:
-            raise EarlyGoalError()
+            return iter(())
 
-    return allgoal
-
-
-def lany(*goals):
-    """Construct a logical any goal."""
-    if len(goals) == 1:
-        return goals[0]
-    return lanyseq(goals)
+    return eq_goal
 
 
-def earlysafe(goal):
-    """Check if a goal can be evaluated without raising an EarlyGoalError."""
-    try:
-        goaleval(goal)
-        return True
-    except EarlyGoalError:
-        return False
+def ldisj_seq(goals):
+    """Produce a goal that returns the appended state stream from all successful goal arguments.
 
-
-def earlyorder(*goals):
-    """Reorder goals to avoid EarlyGoalErrors.
-
-    All goals are evaluated.  Those that raise EarlyGoalErrors are placed at
-    the end in a lall
-
-    See Also
-    --------
-        EarlyGoalError
+    In other words, it behaves like logical disjunction/OR for goals.
     """
-    if not goals:
-        return ()
-    groups = groupby(earlysafe, goals)
-    good = groups.get(True, [])
-    bad = groups.get(False, [])
 
-    if not good:
-        raise EarlyGoalError()
-    elif not bad:
-        return tuple(good)
-    else:
-        return tuple(good) + ((lall,) + tuple(bad),)
+    if length_hint(goals, -1) == 0:
+        return succeed
+
+    def ldisj_seq_goal(S):
+        nonlocal goals
+
+        goals, _goals = tee(goals)
+
+        yield from interleave(g(S) for g in _goals)
+
+    return ldisj_seq_goal
 
 
-def conde(*goalseqs):
-    """Construct a logical cond goal.
+def bind(z, g):
+    """Apply a goal to a state stream and then combine the resulting state streams."""
+    # We could also use `chain`, but `interleave` preserves the old behavior.
+    # return chain.from_iterable(map(g, z))
+    return interleave(map(g, z))
 
-    Goal constructor to provides logical AND and OR
 
-    conde((A, B, C), (D, E)) means (A and B and C) or (D and E)
-    Equivalent to the (A, B, C); (D, E) syntax in Prolog.
+def lconj_seq(goals):
+    """Produce a goal that returns the appended state stream in which all goals are necessarily successful.
 
-    See Also
-    --------
-        lall - logical all
-        lany - logical any
+    In other words, it behaves like logical conjunction/AND for goals.
     """
-    return (lany,) + tuple((lall,) + tuple(gs) for gs in goalseqs)
+
+    if length_hint(goals, -1) == 0:
+        return succeed
+
+    def lconj_seq_goal(S):
+        nonlocal goals
+
+        goals, _goals = tee(goals)
+
+        g0 = next(_goals, None)
+
+        if g0 is None:
+            return
+
+        yield from reduce(bind, _goals, g0(S))
+
+    return lconj_seq_goal
 
 
-def lanyseq(goals):
-    """Construct a logical any with a possibly infinite number of goals."""
+def ldisj(*goals):
+    """Form a disjunction of goals."""
+    if len(goals) == 1 and isinstance(goals[0], Generator):
+        goals = goals[0]
 
-    def anygoal(s):
-        anygoal.goals, local_goals = tee(anygoal.goals)
-
-        def f(goals):
-            for goal in goals:
-                try:
-                    yield goaleval(reify(goal, s))(s)
-                except EarlyGoalError:
-                    pass
-
-        return unique(
-            interleave(f(local_goals), pass_exceptions=[EarlyGoalError]), key=dicthash
-        )
-
-    anygoal.goals = goals
-
-    return anygoal
+    return ldisj_seq(goals)
 
 
-def condeseq(goalseqs):
-    """Construct a goal like conde, but support generic, possibly infinite iterators of goals."""
-    return (lanyseq, ((lall,) + tuple(gs) for gs in goalseqs))
+def lconj(*goals):
+    """Form a conjunction of goals."""
+    if len(goals) == 1 and isinstance(goals[0], Generator):
+        goals = goals[0]
+
+    return lconj_seq(goals)
 
 
-def everyg(predicate, coll):
-    """Assert that a predicate applies to all elements of a collection."""
-    return (lall,) + tuple((predicate, x) for x in coll)
+def conde(*goals):
+    """Form a disjunction of goal conjunctions."""
+    if len(goals) == 1 and isinstance(goals[0], Generator):
+        goals = goals[0]
+
+    return ldisj_seq(lconj_seq(g) for g in goals)
+
+
+lall = lconj
+lany = ldisj
 
 
 def ground_order_key(S, x):
@@ -224,11 +149,11 @@ def ifa(g1, g2):
     """Create a goal operator that returns the first stream unless it fails."""
 
     def ifa_goal(S):
-        g1_stream = goaleval(g1)(S)
+        g1_stream = g1(S)
         S_new = next(g1_stream, None)
 
         if S_new is None:
-            yield from goaleval(g2)(S)
+            yield from g2(S)
         else:
             yield S_new
             yield from g1_stream
@@ -240,12 +165,12 @@ def Zzz(gctor, *args, **kwargs):
     """Create an inverse-η-delay for a goal."""
 
     def Zzz_goal(S):
-        yield from goaleval(gctor(*args, **kwargs))(S)
+        yield from gctor(*args, **kwargs)(S)
 
     return Zzz_goal
 
 
-def run_all(n, x, *goals, results_filter=None):
+def run(n, x, *goals, results_filter=None):
     """Run a logic program and obtain n solutions that satisfy the given goals.
 
     >>> from kanren import run, var, eq
@@ -256,7 +181,7 @@ def run_all(n, x, *goals, results_filter=None):
     Parameters
     ----------
     n: int
-        The number of desired solutions (see `take`). `n=0` returns a tuple
+        The number of desired solutions. `n=0` returns a tuple
         with all results and `n=None` returns a lazy sequence of all results.
     x: object
         The form to reify and output.  Usually contains logic variables used in
@@ -264,69 +189,20 @@ def run_all(n, x, *goals, results_filter=None):
     goals: Callables
         A sequence of goals that must be true in logical conjunction
         (i.e. `lall`).
+    results_filter: Callable
+        A function to apply to the results stream (e.g. a `unique` filter).
     """
-    results = map(partial(reify, x), goaleval(lall(*goals))({}))
+    results = map(partial(reify, x), lall(*goals)({}))
+
     if results_filter is not None:
         results = results_filter(results)
-    return take(n, results)
 
-
-run = partial(run_all, results_filter=partial(unique, key=multihash))
-
-
-class EarlyGoalError(Exception):
-    """An exception indicating that a goal has been constructed prematurely.
-
-    Consider the following case
-
-    >>> from kanren import run, eq, membero, var
-    >>> x, coll = var(), var()
-    >>> run(0, x, (membero, x, coll), (eq, coll, (1, 2, 3))) # doctest: +SKIP
-
-    The first goal, membero, iterates over an infinite sequence of all possible
-    collections.  This is unproductive.  Rather than proceed, membero raises an
-    EarlyGoalError, stating that this goal has been called early.
-
-    The goal constructor lall Logical-All-Early will reorder such goals to
-    the end so that the call becomes
-
-    >>> run(0, x, (eq, coll, (1, 2, 3)), (membero, x, coll)) # doctest: +SKIP
-
-    In this case coll is first unified to ``(1, 2, 3)`` then x iterates over
-    all elements of coll, 1, then 2, then 3.
-
-    See Also
-    --------
-        lall
-        earlyorder
-    """
-
-
-def find_fixed_point(f, arg):
-    """Repeatedly calls f until a fixed point is reached.
-
-    This may not terminate, but should if you apply some eventually-idempotent
-    simplification operation like evalt.
-    """
-    last, cur = object(), arg
-    while last != cur:
-        last = cur
-        cur = f(cur)
-    return cur
-
-
-def goaleval(goal):
-    """Expand and then evaluate a goal.
-
-    See Also
-    --------
-       goalexpand
-    """
-    if callable(goal):  # goal is already a function like eq(x, 1)
-        return goal
-    if isinstance(goal, tuple):  # goal is not yet evaluated like (eq, x, 1)
-        return find_fixed_point(evalt, goal)
-    raise TypeError("Expected either function or tuple")
+    if n is None:
+        return results
+    elif n == 0:
+        return tuple(results)
+    else:
+        return tuple(take(n, results))
 
 
 def dbgo(*args, msg=None):  # pragma: no cover
