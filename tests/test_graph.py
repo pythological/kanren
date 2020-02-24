@@ -75,7 +75,7 @@ def single_math_reduceo(expanded_term, reduced_term):
 
 math_reduceo = partial(reduceo, single_math_reduceo)
 
-term_walko = partial(
+walko_term = partial(
     walko,
     rator_goal=eq,
     null_type=ExpressionTuple,
@@ -395,11 +395,11 @@ def test_walko(test_input, test_output):
     """Test `walko` with fully ground terms (i.e. no logic variables)."""
 
     q_lv = var()
-    term_walko_fp = partial(reduceo, partial(term_walko, single_math_reduceo))
+    walko_term_fp = partial(reduceo, partial(walko_term, single_math_reduceo))
     test_res = run(
         len(test_output),
         q_lv,
-        term_walko_fp(test_input, q_lv),
+        walko_term_fp(test_input, q_lv),
         results_filter=toolz.unique,
     )
 
@@ -420,7 +420,7 @@ def test_walko_reverse():
     """Test `walko` in "reverse" (i.e. specify the reduced form and generate the un-reduced form)."""
     q_lv = var("q")
 
-    test_res = run(2, q_lv, term_walko(math_reduceo, q_lv, 5))
+    test_res = run(2, q_lv, walko_term(math_reduceo, q_lv, 5))
     assert test_res == (
         etuple(log, etuple(exp, 5)),
         etuple(log, etuple(exp, etuple(log, etuple(exp, 5)))),
@@ -428,7 +428,7 @@ def test_walko_reverse():
     assert all(e.eval_obj == 5.0 for e in test_res)
 
     # Make sure we get some variety in the results
-    test_res = run(2, q_lv, term_walko(math_reduceo, q_lv, etuple(mul, 2, 5)))
+    test_res = run(2, q_lv, walko_term(math_reduceo, q_lv, etuple(mul, 2, 5)))
     assert test_res == (
         # Expansion of the term's root
         etuple(add, 5, 5),
@@ -442,7 +442,7 @@ def test_walko_reverse():
     assert all(e.eval_obj == 10.0 for e in test_res)
 
     r_lv = var("r")
-    test_res = run(4, [q_lv, r_lv], term_walko(math_reduceo, q_lv, r_lv))
+    test_res = run(4, [q_lv, r_lv], walko_term(math_reduceo, q_lv, r_lv))
     expect_res = (
         [etuple(add, 1, 1), etuple(mul, 2, 1)],
         [etuple(log, etuple(exp, etuple(add, 1, 1))), etuple(mul, 2, 1)],
