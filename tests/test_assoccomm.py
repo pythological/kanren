@@ -18,7 +18,6 @@ from kanren.assoccomm import (
     eq_assoc,
     eq_assoccomm,
     assoc_args,
-    op_args,
     flatten_assoc_args,
     assoc_flatten,
 )
@@ -82,12 +81,6 @@ def results(g, s=None):
     if s is None:
         s = dict()
     return tuple(g(s))
-
-
-def test_op_args():
-    assert op_args(var()) == (None, None)
-    assert op_args(add(1, 2, 3)) == (Add, (1, 2, 3))
-    assert op_args("foo") == (None, None)
 
 
 def test_eq_comm():

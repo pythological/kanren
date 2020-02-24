@@ -34,9 +34,9 @@ from collections.abc import Sequence
 
 from toolz import sliding_window
 
-from unification import isvar, var, reify, unify
+from unification import reify, unify, var
 
-from cons.core import ConsError, ConsPair, car, cdr
+from cons.core import ConsPair, car, cdr
 
 from etuples import etuple
 
@@ -44,20 +44,10 @@ from .core import conde, eq, ground_order, lall, succeed
 from .goals import itero, permuteo
 from .facts import Relation
 from .graph import term_walko
-from .term import term, operator, arguments
+from .term import term
 
 associative = Relation("associative")
 commutative = Relation("commutative")
-
-
-def op_args(x):
-    """Break apart x into an operation and tuple of args."""
-    if isvar(x):
-        return None, None
-    try:
-        return operator(x), arguments(x)
-    except (ConsError, NotImplementedError):
-        return None, None
 
 
 def flatten_assoc_args(op_predicate, items):
