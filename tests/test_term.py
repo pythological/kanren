@@ -4,66 +4,9 @@ from cons import cons
 from etuples import etuple
 
 from kanren.core import run
-from kanren.term import arguments, operator, term, unifiable_with_term, applyo
+from kanren.term import applyo, arguments, operator, term
 
-
-@unifiable_with_term
-class Node(object):
-    def __init__(self, op, args):
-        self.op = op
-        self.args = args
-
-    def __eq__(self, other):
-        return (
-            type(self) == type(other)
-            and self.op == other.op
-            and self.args == other.args
-        )
-
-    def __hash__(self):
-        return hash((type(self), self.op, self.args))
-
-    def __str__(self):
-        return "%s(%s)" % (self.op.name, ", ".join(map(str, self.args)))
-
-    __repr__ = __str__
-
-
-class Operator(object):
-    def __init__(self, name):
-        self.name = name
-
-
-Add = Operator("add")
-Mul = Operator("mul")
-
-
-def add(*args):
-    return Node(Add, args)
-
-
-def mul(*args):
-    return Node(Mul, args)
-
-
-class Op(object):
-    def __init__(self, name):
-        self.name = name
-
-
-@arguments.register(Node)
-def arguments_Node(t):
-    return t.args
-
-
-@operator.register(Node)
-def operator_Node(t):
-    return t.op
-
-
-@term.register(Operator, (list, tuple))
-def term_Op(op, args):
-    return Node(op, args)
+from tests.utils import Node, Operator, Add
 
 
 def test_applyo():
@@ -104,21 +47,35 @@ def test_applyo():
 
 def test_applyo_object():
     x = var()
-    assert run(0, x, applyo(Add, (1, 2, 3), x)) == (add(1, 2, 3),)
-    assert run(0, x, applyo(x, (1, 2, 3), add(1, 2, 3))) == (Add,)
-    assert run(0, x, applyo(Add, x, add(1, 2, 3))) == ((1, 2, 3),)
+    assert run(0, x, applyo(Add, (1, 2, 3), x)) == (Add(1, 2, 3),)
+    assert run(0, x, applyo(x, (1, 2, 3), Add(1, 2, 3))) == (Add,)
+    assert run(0, x, applyo(Add, x, Add(1, 2, 3))) == ((1, 2, 3),)
+
+
+def test_term_dispatch():
+
+    t = Node(Add, (1, 2))
+
+    assert arguments(t) == (1, 2)
+    assert operator(t) == Add
+    assert term(operator(t), arguments(t)) == t
 
 
 def test_unifiable_with_term():
-    add = Operator("add")
-    t = Node(add, (1, 2))
+    from kanren.term import unifiable_with_term
 
-    assert arguments(t) == (1, 2)
-    assert operator(t) == add
-    assert term(operator(t), arguments(t)) == t
+    @unifiable_with_term
+    class NewNode(Node):
+        pass
+
+    class NewOperator(Operator):
+        def __call__(self, *args):
+            return NewNode(self, args)
+
+    NewAdd = NewOperator("newadd")
 
     x = var()
-    s = unify(Node(add, (1, x)), Node(add, (1, 2)), {})
+    s = unify(NewNode(NewAdd, (1, x)), NewNode(NewAdd, (1, 2)), {})
 
     assert s == {x: 2}
-    assert reify(Node(add, (1, x)), s) == Node(add, (1, 2))
+    assert reify(NewNode(NewAdd, (1, x)), s) == NewNode(NewAdd, (1, 2))

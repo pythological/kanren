@@ -15,7 +15,7 @@ from cons import cons
 
 from kanren import run, eq, conde, lall
 from kanren.constraints import isinstanceo
-from kanren.graph import reduceo, map_anyo, walko, mapo, eq_length
+from kanren.graph import eq_length, map_anyo, mapo, reduceo, walko
 
 
 class OrderedFunction(object):
