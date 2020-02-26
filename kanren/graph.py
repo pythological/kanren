@@ -199,36 +199,23 @@ def walko(
         The map relation used to apply `goal` to a sub-graph.
     """
 
-    def walko_goal(s):
+    rator_in, rands_in, rator_out, rands_out = var(), var(), var(), var()
 
-        nonlocal goal, rator_goal, graph_in, graph_out, null_type, map_rel
+    _walko = partial(
+        walko, goal, rator_goal=rator_goal, null_type=null_type, map_rel=map_rel
+    )
 
-        graph_in_rf, graph_out_rf = reify((graph_in, graph_out), s)
-
-        rator_in, rands_in, rator_out, rands_out = var(), var(), var(), var()
-
-        _walko = partial(
-            walko, goal, rator_goal=rator_goal, null_type=null_type, map_rel=map_rel
-        )
-
-        g = conde(
-            # TODO: Use `Zzz`, if needed.
-            [goal(graph_in_rf, graph_out_rf),],
-            [
-                lall(
-                    applyo(rator_in, rands_in, graph_in_rf),
-                    applyo(rator_out, rands_out, graph_out_rf),
-                    rator_goal(rator_in, rator_out),
-                    map_rel(_walko, rands_in, rands_out, null_type=null_type),
-                )
-                if rator_goal is not None
-                else map_rel(_walko, graph_in_rf, graph_out_rf, null_type=null_type),
-            ],
-        )
-
-        yield from g(s)
-
-    return walko_goal
+    return conde(
+        [Zzz(goal, graph_in, graph_out),],
+        [
+            applyo(rator_in, rands_in, graph_in),
+            applyo(rator_out, rands_out, graph_out),
+            Zzz(rator_goal, rator_in, rator_out),
+            Zzz(map_rel, _walko, rands_in, rands_out, null_type=null_type),
+        ]
+        if rator_goal is not None
+        else [Zzz(map_rel, _walko, graph_in, graph_out, null_type=null_type)],
+    )
 
 
 def term_walko(
