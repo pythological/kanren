@@ -1,10 +1,11 @@
 from unification import var, unify, reify
 
 from cons import cons
+from cons.core import ConsType
 from etuples import etuple
 
 from kanren.core import run
-from kanren.term import applyo, arguments, operator, term
+from kanren.term import applyo, arguments, operator, term, TermType
 
 from tests.utils import Node, Operator, Add
 
@@ -79,3 +80,12 @@ def test_unifiable_with_term():
 
     assert s == {x: 2}
     assert reify(NewNode(NewAdd, (1, x)), s) == NewNode(NewAdd, (1, 2))
+
+
+def test_TermType():
+    assert issubclass(type(Add(1, 2)), TermType)
+    assert isinstance(Add(1, 2), TermType)
+    assert not issubclass(type([1, 2]), TermType)
+    assert not isinstance([1, 2], TermType)
+    assert not isinstance(ConsType, TermType)
+    assert not issubclass(type(ConsType), TermType)
