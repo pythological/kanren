@@ -4,7 +4,7 @@ from cons import cons
 from cons.core import ConsType
 from etuples import etuple
 
-from kanren.core import run
+from kanren.core import run, shallow_ground_order_key
 from kanren.term import applyo, arguments, operator, term, TermType
 
 from tests.utils import Node, Operator, Add
@@ -89,3 +89,16 @@ def test_TermType():
     assert not isinstance([1, 2], TermType)
     assert not isinstance(ConsType, TermType)
     assert not issubclass(type(ConsType), TermType)
+
+
+def test_shallow_ground_order():
+
+    x, y, z = var(), var(), var()
+
+    assert shallow_ground_order_key({}, x) > shallow_ground_order_key({}, Add(x, y))
+    assert shallow_ground_order_key({}, cons(x, y)) > shallow_ground_order_key(
+        {}, Add(x, y)
+    )
+    assert shallow_ground_order_key({}, Add(x, y)) == shallow_ground_order_key(
+        {}, Add(x, y, z)
+    )

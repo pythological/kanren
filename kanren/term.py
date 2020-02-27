@@ -8,7 +8,7 @@ from cons.core import cons, ConsError
 
 from etuples import apply as term, rands as arguments, rator as operator
 
-from .core import eq, lall
+from .core import eq, lall, shallow_ground_order_key
 from .goals import conso
 
 
@@ -104,3 +104,8 @@ def unify_term(u, v, s):
     if s is not False:
         s = yield _unify(u_args, v_args, s)
     yield s
+
+
+@shallow_ground_order_key.register(Mapping, TermType)
+def shallow_ground_order_key_TermType(S, x):
+    return shallow_ground_order_key(S, cons(operator(x), arguments(x)))

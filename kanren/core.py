@@ -1,11 +1,13 @@
+from statistics import mean
 from itertools import tee
 from operator import length_hint
 from functools import partial, reduce
-from collections.abc import Sequence, Generator
+from collections.abc import Sequence, Generator, Mapping
 
-from cons.core import ConsPair
+from multipledispatch import dispatch
+
+from cons.core import ConsPair, car, cdr
 from unification import reify, unify, isvar
-from unification.core import isground
 
 from toolz import interleave, take
 
@@ -114,18 +116,25 @@ lall = lconj
 lany = ldisj
 
 
-def ground_order_key(S, x):
+@dispatch(Mapping, object)
+def shallow_ground_order_key(S, x):
     if isvar(x):
-        return 2
-    elif isground(x, S):
-        return -1
-    elif issubclass(type(x), ConsPair):
-        return 1
-    else:
-        return 0
+        return 10
+    elif isinstance(x, ConsPair):
+        val = 0
+        val += 1 if isvar(car(x)) else 0
+        cdr_x = cdr(x)
+        if issubclass(type(x), ConsPair):
+            val += 2 if isvar(cdr_x) else 0
+        elif len(cdr_x) == 1:
+            val += 1 if isvar(cdr_x[0]) else 0
+        elif len(cdr_x) > 1:
+            val += mean(1.0 if isvar(i) else 0.0 for i in cdr_x)
+        return val
+    return 0
 
 
-def ground_order(in_args, out_args):
+def ground_order(in_args, out_args, key_fn=shallow_ground_order_key):
     """Construct a non-relational goal that orders a list of terms based on groundedness (grounded precede ungrounded)."""
 
     def ground_order_goal(S):
@@ -135,7 +144,7 @@ def ground_order(in_args, out_args):
 
         S_new = unify(
             list(out_args_rf) if isinstance(out_args_rf, Sequence) else out_args_rf,
-            sorted(in_args_rf, key=partial(ground_order_key, S)),
+            sorted(in_args_rf, key=partial(key_fn, S)),
             S,
         )
 
