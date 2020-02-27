@@ -154,6 +154,44 @@ def ground_order(in_args, out_args, key_fn=shallow_ground_order_key):
     return ground_order_goal
 
 
+def ground_order_seqs(in_seqs, out_seqs, key_fn=shallow_ground_order_key):
+    """Construct a non-relational goal that orders lists of sequences based on the groundedness of their corresponding terms.
+
+    >>> from unification import var
+    >>> x, y = var('x'), var('y')
+    >>> a, b = var('a'), var('b')
+    >>> run(0, (x, y), ground_order_seqs([(a, b), (b, 2)], [x, y]))
+    (((~b, ~a), (2, ~b)),)
+    """
+
+    def ground_order_seqs_goal(S):
+        nonlocal in_seqs, out_seqs, key_fn
+
+        in_seqs_rf, out_seqs_rf = reify((in_seqs, out_seqs), S)
+
+        if (
+            not any(isinstance(s, str) for s in in_seqs_rf)
+            and reduce(
+                lambda x, y: x == y and y, (length_hint(s, -1) for s in in_seqs_rf)
+            )
+            > 0
+        ):
+
+            in_seqs_ord = zip(*sorted(zip(*in_seqs_rf), key=partial(key_fn, S)))
+            S_new = unify(list(out_seqs_rf), list(in_seqs_ord), S)
+
+            if S_new is not False:
+                yield S_new
+        else:
+
+            S_new = unify(out_seqs_rf, in_seqs_rf, S)
+
+            if S_new is not False:
+                yield S_new
+
+    return ground_order_seqs_goal
+
+
 def ifa(g1, g2):
     """Create a goal operator that returns the first stream unless it fails."""
 
