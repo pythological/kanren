@@ -9,63 +9,208 @@ from functools import partial
 from operator import length_hint, eq as equal
 from collections.abc import Sequence
 
-from toolz import sliding_window
 
 from unification import reify, unify, var
 
-from cons.core import ConsPair, car, cdr
 
 from etuples import etuple
 
-from .core import conde, eq, ground_order, lall, succeed
-from .goals import itero, permuteo
+from .core import conde, eq, ground_order, lall, lany, succeed, Zzz, fail
+from .goals import itero, permuteo, conso
 from .facts import Relation
 from .graph import term_walko
-from .term import term
+from .term import term, applyo, TermType, operator, arguments
 
 associative = Relation("associative")
 commutative = Relation("commutative")
 
 
-def flatten_assoc_args(op_predicate, items, shallow=True):
-    for i in items:
-        if isinstance(i, ConsPair) and op_predicate(car(i)):
-            i_cdr = cdr(i)
-            if length_hint(i_cdr) > 0:
-                if shallow:
-                    yield from iter(i_cdr)
+def flatten_assoc_args(op_predicate, term, shallow=True):
+    """Flatten/normalize a term with an associative operator.
+
+    Parameters
+    ----------
+    op_predicate: callable
+        A function used to determine the operators to flatten.
+    items: Sequence
+        The term to flatten.
+    shallow: bool (optional)
+        Indicate whether or not flattening should be done at all depths.
+    """
+
+    if not isinstance(term, TermType):
+        return term
+
+    def _flatten(term):
+        for i in term:
+            if isinstance(i, TermType) and op_predicate(operator(i)):
+                i_cdr = arguments(i)
+                if length_hint(i_cdr) > 0:
+                    if shallow:
+                        yield from iter(i_cdr)
+                    else:
+                        yield from _flatten(i_cdr)
                 else:
-                    yield from flatten_assoc_args(op_predicate, i_cdr)
+                    yield i
             else:
                 yield i
-        else:
-            yield i
+
+    term_type = type(arguments(term))
+    return term_type(_flatten(term))
 
 
-def assoc_args(rator, rands, n, ctor=None):
+def partitions(in_seq, n_parts=None, min_size=1, part_fn=lambda x: x):
+    """Generate all partitions of a sequence for given numbers of partitions and minimum group sizes.
+
+    Parameters
+    ----------
+    in_seq: Sequence
+       The sequence to be partitioned.
+    n_parts: int
+       Number of partitions.  `None` means all partitions in `range(2, len(in_seq))`.
+    min_size: int
+       The minimum size of a partition.
+    part_fn: Callable
+       A function applied to every partition.
+    """
+
+    def partition(seq, res):
+        if (
+            n_parts is None
+            and
+            # We don't want the original sequence
+            len(res) > 0
+        ) or len(res) + 1 == n_parts:
+            yield type(in_seq)(res + [part_fn(seq)])
+
+            if n_parts is not None:
+                return
+
+        for s in range(min_size, len(seq) + 1 - min_size, 1):
+            yield from partition(seq[s:], res + [part_fn(seq[:s])])
+
+    return partition(in_seq, [])
+
+
+def assoc_args(rator, rands, n=None, ctor=None):
     """Produce all associative argument combinations of rator + rands in n-sized rand groupings.
 
-    >>> from kanren.assoccomm import assoc_args
-    >>> list(assoc_args('op', [1, 2, 3], 2))
-    [[['op', 1, 2], 3], [1, ['op', 2, 3]]]
-    """
-    assert n > 0
+    The normal/canonical form is left-associative, e.g.
+        `(op, 1, 2, 3, 4) == (op, (op, (op, 1, 2), 3), 4)`
 
-    rands_l = list(rands)
+    Parameters
+    ----------
+    rator: object
+        The operator that's assumed to be associative.
+    rands: Sequence
+        The operands.
+    n: int (optional)
+        The number of arguments in the resulting `(op,) + output` terms.
+        If not specified, all argument sizes are returned.
+    ctor: callable
+        The constructor to use when each term is created.
+        If not specified, the constructor is inferred from `type(rands)`.
+    """
 
     if ctor is None:
         ctor = type(rands)
 
-    if n == len(rands_l):
+    if len(rands) <= 2 or n is not None and len(rands) <= n:
         yield ctor(rands)
         return
 
-    for i, new_rands in enumerate(sliding_window(n, rands_l)):
-        prefix = rands_l[:i]
-        new_term = term(rator, ctor(new_rands))
-        suffix = rands_l[n + i :]
-        res = ctor(prefix + [new_term] + suffix)
-        yield res
+    def part_fn(x):
+        if len(x) == 1:
+            return x[0]
+        else:
+            return term(rator, ctor(x))
+
+    for p in partitions(rands, n, 1, part_fn=part_fn):
+        yield ctor(p)
+
+
+def assoc_flatteno(a, a_flat, no_ident=False, null_type=etuple):
+    """Construct a goal that flattens/normalizes terms with associative operators.
+
+    The normal/canonical form is left-associative, e.g.
+        `(op, 1, 2, 3, 4) == (op, (op, (op, 1, 2), 3), 4)`
+
+    Parameters
+    ----------
+    a: Var or Sequence
+        The "input" term to flatten.
+    a_flat: Var or Sequence
+        The flattened result, or "output", term.
+    no_ident: bool (optional)
+        Whether or not to fail if no flattening occurs.
+    """
+
+    def assoc_flatteno_goal(S):
+        nonlocal a, a_flat
+
+        a_rf, a_flat_rf = reify((a, a_flat), S)
+
+        if isinstance(a_rf, TermType) and (operator(a_rf),) in associative.facts:
+
+            a_op = operator(a_rf)
+            args_rf = arguments(a_rf)
+
+            def op_pred(sub_op):
+                return sub_op == a_op
+
+            a_flat_rf = term(a_op, flatten_assoc_args(op_pred, args_rf))
+
+            if a_flat_rf == a_rf and no_ident:
+                return
+
+            yield from eq(a_flat, a_flat_rf)(S)
+
+        elif (
+            isinstance(a_flat_rf, TermType)
+            and (operator(a_flat_rf),) in associative.facts
+        ):
+
+            a_flat_op = operator(a_flat_rf)
+            args_rf = arguments(a_flat_rf)
+            assoc_args_iter = assoc_args(a_flat_op, args_rf)
+
+            # TODO: There are much better ways to do this `no_ident` check
+            # (e.g. the `n` argument of `assoc_args` should probably be made to
+            # work for this)
+            yield from lany(
+                fail if no_ident and r is args_rf else applyo(a_flat_op, r, a_rf)
+                for r in assoc_args_iter
+            )(S)
+
+        else:
+
+            op = var()
+            a_rands = var()
+            a_rands_rands = var()
+            a_flat_rands = var()
+            a_flat_rands_rands = var()
+
+            g = conde(
+                [fail if no_ident else eq(a_rf, a_flat_rf)],
+                [
+                    associative(op),
+                    applyo(op, a_rands, a_rf),
+                    applyo(op, a_flat_rands, a_flat_rf),
+                    # There must be at least two rands
+                    conso(var(), a_rands_rands, a_rands),
+                    conso(var(), var(), a_rands_rands),
+                    conso(var(), a_flat_rands_rands, a_flat_rands),
+                    conso(var(), var(), a_flat_rands_rands),
+                    itero(
+                        a_flat_rands, nullo_refs=(a_rands,), default_ConsNull=null_type
+                    ),
+                    Zzz(assoc_flatteno, a_rf, a_flat_rf, no_ident=no_ident),
+                ],
+            )
+
+            yield from g(S)
+
+    return assoc_flatteno_goal
 
 
 def eq_assoc_args(
@@ -100,15 +245,17 @@ def eq_assoc_args(
             u_args_flat = type(u_args_rf)(flatten_assoc_args(op_pred, u_args_rf))
             v_args_flat = type(v_args_rf)(flatten_assoc_args(op_pred, v_args_rf))
 
-            if len(u_args_flat) == len(v_args_flat):
+            u_len, v_len = len(u_args_flat), len(v_args_flat)
+            if u_len == v_len:
                 g = inner_eq(u_args_flat, v_args_flat)
             else:
-                if len(u_args_flat) < len(v_args_flat):
+                if u_len < v_len:
                     sm_args, lg_args = u_args_flat, v_args_flat
+                    grp_sizes = u_len
                 else:
                     sm_args, lg_args = v_args_flat, u_args_flat
+                    grp_sizes = v_len
 
-                grp_sizes = len(lg_args) - len(sm_args) + 1
                 assoc_terms = assoc_args(
                     op_rf, lg_args, grp_sizes, ctor=type(u_args_rf)
                 )
@@ -131,20 +278,13 @@ def eq_assoc_args(
 
                 u_args_flat = list(flatten_assoc_args(partial(equal, op_rf), u_args_rf))
 
-                if n_rf is not None:
-                    arg_sizes = [n_rf]
-                else:
-                    arg_sizes = range(2, len(u_args_flat) + (not no_ident))
-
-                v_ac_args = (
-                    v_ac_arg
-                    for n_i in arg_sizes
+                g = conde(
+                    [inner_eq(v_args_rf, v_ac_arg)]
                     for v_ac_arg in assoc_args(
-                        op_rf, u_args_flat, n_i, ctor=type(u_args_rf)
+                        op_rf, u_args_flat, n_rf, ctor=type(u_args_rf)
                     )
                     if not no_ident or v_ac_arg != u_args_rf
                 )
-                g = conde([inner_eq(v_args_rf, v_ac_arg)] for v_ac_arg in v_ac_args)
 
             yield from g(S)
 
@@ -204,28 +344,6 @@ def eq_comm(u, v, op_predicate=commutative, null_type=etuple):
     return term_walko(op_predicate, permuteo_unique, u, v)
 
 
-def assoc_flatten(a, a_flat):
-    def assoc_flatten_goal(S):
-        nonlocal a, a_flat
-
-        a_rf = reify(a, S)
-
-        if isinstance(a_rf, Sequence) and (a_rf[0],) in associative.facts:
-
-            def op_pred(sub_op):
-                nonlocal S
-                sub_op_rf = reify(sub_op, S)
-                return sub_op_rf == a_rf[0]
-
-            a_flat_rf = type(a_rf)(flatten_assoc_args(op_pred, a_rf))
-        else:
-            a_flat_rf = a_rf
-
-        yield from eq(a_flat, a_flat_rf)(S)
-
-    return assoc_flatten_goal
-
-
 def eq_assoccomm(u, v, null_type=etuple):
     """Construct a goal for associative and commutative unification.
 
@@ -269,6 +387,6 @@ def eq_assoccomm(u, v, null_type=etuple):
         eq_assoccomm_step,
         u,
         v,
-        format_step=assoc_flatten,
+        format_step=assoc_flatteno,
         no_ident=False,
     )

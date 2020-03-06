@@ -16,7 +16,7 @@ setup(
     packages=["kanren"],
     install_requires=[
         "toolz",
-        "cons >= 0.4.0",
+        "cons >= 0.4.2",
         "multipledispatch",
         "etuples >= 0.3.1",
         "logical-unification >= 0.4.1",

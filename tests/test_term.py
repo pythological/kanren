@@ -85,8 +85,10 @@ def test_unifiable_with_term():
 def test_TermType():
     assert issubclass(type(Add(1, 2)), TermType)
     assert isinstance(Add(1, 2), TermType)
-    assert not issubclass(type([1, 2]), TermType)
-    assert not isinstance([1, 2], TermType)
+    # assert not issubclass(type([1, 2]), TermType)
+    # assert not isinstance([1, 2], TermType)
+    assert issubclass(type([1, 2]), TermType)
+    assert isinstance([1, 2], TermType)
     assert not isinstance(ConsType, TermType)
     assert not issubclass(type(ConsType), TermType)
 
