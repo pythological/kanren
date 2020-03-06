@@ -218,9 +218,8 @@ def eq_assoc_args(
 ):
     """Create a goal that applies associative unification to an operator and two sets of arguments.
 
-    This is a non-relational utility goal.  It does assumes that the op and at
-    least one set of arguments are ground under the state in which it is
-    evaluated.
+    This is a non-relational utility goal.  It assumes that the op and at least
+    one set of arguments are ground under the state in which it is evaluated.
     """
     u_args, v_args = var(), var()
 
@@ -295,7 +294,7 @@ def eq_assoc_args(
     )
 
 
-def eq_assoc(u, v, n=None, op_predicate=associative, null_type=etuple):
+def eq_assoc(u, v, n=None, op_predicate=associative, null_type=etuple, no_ident=False):
     """Create a goal for associative unification of two terms.
 
     Warning: This goal walks the left-hand argument, `u`, so make that argument
@@ -316,10 +315,10 @@ def eq_assoc(u, v, n=None, op_predicate=associative, null_type=etuple):
     def assoc_args_unique(a, b, op, **kwargs):
         return eq_assoc_args(op, a, b, no_ident=True, null_type=null_type)
 
-    return term_walko(op_predicate, assoc_args_unique, u, v, n=n)
+    return term_walko(op_predicate, assoc_args_unique, u, v, n=n, no_ident=no_ident)
 
 
-def eq_comm(u, v, op_predicate=commutative, null_type=etuple):
+def eq_comm(u, v, op_predicate=commutative, null_type=etuple, no_ident=False):
     """Create a goal for commutative equality.
 
     Warning: This goal walks the left-hand argument, `u`, so make that argument
@@ -341,7 +340,7 @@ def eq_comm(u, v, op_predicate=commutative, null_type=etuple):
     def permuteo_unique(x, y, op, **kwargs):
         return permuteo(x, y, no_ident=True, default_ConsNull=null_type)
 
-    return term_walko(op_predicate, permuteo_unique, u, v)
+    return term_walko(op_predicate, permuteo_unique, u, v, no_ident=no_ident)
 
 
 def eq_assoccomm(u, v, null_type=etuple):
