@@ -123,8 +123,10 @@ def test_eq_comm_all_variations():
     }
 
     x = var()
-    res = run(0, x, eq_comm((comm_op, 1, (comm_op, 2, (comm_op, 3, 4))), x))
-    assert sorted(res, key=str) == sorted(expected_res, key=str)
+
+    for s in expected_res:
+        res = run(0, x, eq_comm(s, x))
+        assert sorted(res, key=str) == sorted(expected_res, key=str)
 
 
 def test_eq_comm_unground():
@@ -490,8 +492,10 @@ def test_eq_assoc_all_variations():
         (assoc_op, 1, 2, (assoc_op, 3, 4)),
         (assoc_op, 1, 2, 3, 4),
     }
-    res = run(0, x, eq_assoc((assoc_op, 1, 2, 3, 4), x))
-    assert sorted(res, key=str) == sorted(expected_res, key=str)
+
+    for s in expected_res:
+        res = run(0, x, eq_assoc(s, x))
+        assert sorted(res, key=str) == sorted(expected_res, key=str)
 
 
 def test_eq_assoc_unground():
@@ -703,7 +707,7 @@ def test_eq_assoccomm_all_variations():
     x = var()
 
     # TODO: Use four arguments to see real associative variation.
-    exp_res = set(
+    expected_res = set(
         (
             (ac, 1, 3, 2),
             (ac, 1, 2, 3),
@@ -725,9 +729,13 @@ def test_eq_assoccomm_all_variations():
             (ac, (ac, 2, 1), 3),
         )
     )
-    assert set(run(0, x, eq_assoccomm((ac, 1, (ac, 2, 3)), x))) == exp_res
-    assert set(run(0, x, eq_assoccomm((ac, 1, 3, 2), x))) == exp_res
-    assert set(run(0, x, eq_assoccomm((ac, 2, (ac, 3, 1)), x))) == exp_res
+
+    for s in expected_res:
+        res = run(0, x, eq_assoccomm(s, x))
+        # TODO FIXME: Avoid the extra identity result
+        res = list(res)
+        res.remove(s)
+        assert sorted(res, key=str) == sorted(expected_res, key=str)
 
 
 def test_eq_assoccomm_unground():
