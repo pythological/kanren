@@ -178,7 +178,11 @@ def ground_order_seqs(in_seqs, out_seqs, key_fn=shallow_ground_order_key):
         ):
 
             in_seqs_ord = zip(*sorted(zip(*in_seqs_rf), key=partial(key_fn, S)))
-            S_new = unify(list(out_seqs_rf), list(in_seqs_ord), S)
+            S_new = unify(
+                list(out_seqs_rf),
+                [type(j)(i) for i, j in zip(in_seqs_ord, in_seqs_rf)],
+                S,
+            )
 
             if S_new is not False:
                 yield S_new

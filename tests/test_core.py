@@ -294,3 +294,5 @@ def test_ground_order_seq():
     assert res == ((((1, b), a), (2, b)),)
     res = run(0, (x, y), ground_order_seqs(["abc", "def"], [x, y]))
     assert res == (("abc", "def"),)
+    res = run(0, (x, y), ground_order_seqs([[1, 2], (1, 2)], [x, y]))
+    assert res == (([1, 2], (1, 2)),)
