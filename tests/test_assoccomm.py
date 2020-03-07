@@ -33,14 +33,14 @@ def results(g, s=None):
 
 
 def test_eq_comm():
-    x, y, z = var(), var(), var()
-
     commutative.facts.clear()
     commutative.index.clear()
 
     comm_op = "comm_op"
 
     fact(commutative, comm_op)
+
+    x, y, z = var(), var(), var()
 
     assert run(0, True, eq_comm(1, 1)) == (True,)
     assert run(0, True, eq_comm((comm_op, 1, 2, 3), (comm_op, 1, 2, 3))) == (True,)
@@ -62,20 +62,6 @@ def test_eq_comm():
     assert not run(0, True, eq_comm((3, comm_op, 2, 1), (comm_op, 1, 2, 3)))
     assert not run(0, True, eq_comm((comm_op, 1, 2, 1), (comm_op, 1, 2, 3)))
     assert not run(0, True, eq_comm(("op", 1, 2, 3), (comm_op, 1, 2, 3)))
-
-    # Test for variable args
-    res = run(4, (x, y), eq_comm(x, y))
-    exp_res_form = (
-        (etuple(comm_op, x, y), etuple(comm_op, y, x)),
-        (x, y),
-        (etuple(etuple(comm_op, x, y)), etuple(etuple(comm_op, y, x))),
-        (etuple(comm_op, x, y, z), etuple(comm_op, x, z, y)),
-    )
-
-    for a, b in zip(res, exp_res_form):
-        s = unify(a, b)
-        assert s is not False
-        assert all(isvar(i) for i in reify((x, y, z), s))
 
     # Make sure it can unify single elements
     assert (3,) == run(0, x, eq_comm((comm_op, 1, 2, 3), (comm_op, 2, x, 1)))
@@ -116,9 +102,53 @@ def test_eq_comm():
     e2 = (y, (comm_op, 1, x))
     assert run(0, (x, y), eq_comm(e1, e2)) == ((3, 2),)
 
-    e1 = (comm_op, 2, (comm_op, 3, 1))
-    e2 = (comm_op, (comm_op, 1, x), y)
-    assert run(0, (x, y), eq_comm(e1, e2)) == ((3, 2),)
+
+def test_eq_comm_all_variations():
+    commutative.facts.clear()
+    commutative.index.clear()
+
+    comm_op = "comm_op"
+
+    fact(commutative, comm_op)
+
+    expected_res = {
+        (comm_op, 1, (comm_op, 2, (comm_op, 3, 4))),
+        (comm_op, 1, (comm_op, 2, (comm_op, 4, 3))),
+        (comm_op, 1, (comm_op, (comm_op, 3, 4), 2)),
+        (comm_op, 1, (comm_op, (comm_op, 4, 3), 2)),
+        (comm_op, (comm_op, 2, (comm_op, 3, 4)), 1),
+        (comm_op, (comm_op, 2, (comm_op, 4, 3)), 1),
+        (comm_op, (comm_op, (comm_op, 3, 4), 2), 1),
+        (comm_op, (comm_op, (comm_op, 4, 3), 2), 1),
+    }
+
+    x = var()
+    res = run(0, x, eq_comm((comm_op, 1, (comm_op, 2, (comm_op, 3, 4))), x))
+    assert sorted(res, key=str) == sorted(expected_res, key=str)
+
+
+def test_eq_comm_unground():
+    commutative.facts.clear()
+    commutative.index.clear()
+
+    comm_op = "comm_op"
+
+    fact(commutative, comm_op)
+
+    x, y, z = var(), var(), var()
+    # Test for variable args
+    res = run(4, (x, y), eq_comm(x, y))
+    exp_res_form = (
+        (etuple(comm_op, x, y), etuple(comm_op, y, x)),
+        (x, y),
+        (etuple(etuple(comm_op, x, y)), etuple(etuple(comm_op, y, x))),
+        (etuple(comm_op, x, y, z), etuple(comm_op, x, z, y)),
+    )
+
+    for a, b in zip(res, exp_res_form):
+        s = unify(a, b)
+        assert s is not False
+        assert all(isvar(i) for i in reify((x, y, z), s))
 
 
 @pytest.mark.xfail(reason="`applyo`/`buildo` needs to be a constraint.", strict=True)
@@ -418,14 +448,6 @@ def test_eq_assoc():
     expr2 = (assoc_op, 1, 2, (assoc_op, x, 5, 6))
     assert run(0, x, eq_assoc(expr1, expr2, n=2)) == ((assoc_op, 3, 4),)
 
-    # TODO: Need groundedness ordering for this
-    # res = run(0, x, eq_assoc(x, (assoc_op, 1, 2, 3), n=2))
-    # assert res == (
-    #     (assoc_op, (assoc_op, 1, 2), 3),
-    #     (assoc_op, 1, 2, 3),
-    #     (assoc_op, 1, (assoc_op, 2, 3)),
-    # )
-
 
 @pytest.mark.xfail(strict=False)
 def test_eq_assoc_cons():
@@ -453,21 +475,20 @@ def test_eq_assoc_all_variations():
     fact(associative, assoc_op)
 
     x = var()
+    # Normalized, our results are left-associative, i.e.
+    # (assoc_op, (assoc_op, (assoc_op, 1, 2), 3), 4) == (assoc_op, 1, 2, 3, 4)
     expected_res = {
-        # Normalized, our results are left-associative, i.e.
-        # (assoc_op, (assoc_op, (assoc_op, 1, 2), 3), 4),
-        # is equal to the following:
-        (assoc_op, 1, 2, 3, 4),
-        (assoc_op, (assoc_op, 1, 2), 3, 4),
-        (assoc_op, 1, (assoc_op, 2, 3), 4),
-        (assoc_op, 1, 2, (assoc_op, 3, 4)),
-        (assoc_op, (assoc_op, 1, 2, 3), 4),
-        (assoc_op, 1, (assoc_op, 2, 3, 4)),
+        (assoc_op, (assoc_op, (assoc_op, 1, 2), 3), 4),  # Missing
+        (assoc_op, (assoc_op, 1, (assoc_op, 2, 3)), 4),  # Missing
         (assoc_op, (assoc_op, 1, 2), (assoc_op, 3, 4)),
-        (assoc_op, (assoc_op, (assoc_op, 1, 2), 3), 4),
-        (assoc_op, (assoc_op, 1, (assoc_op, 2, 3)), 4),
-        (assoc_op, 1, (assoc_op, (assoc_op, 2, 3), 4)),
-        (assoc_op, 1, (assoc_op, 2, (assoc_op, 3, 4))),
+        (assoc_op, (assoc_op, 1, 2), 3, 4),
+        (assoc_op, (assoc_op, 1, 2, 3), 4),
+        (assoc_op, 1, (assoc_op, (assoc_op, 2, 3), 4)),  # Missing
+        (assoc_op, 1, (assoc_op, 2, (assoc_op, 3, 4))),  # Missing
+        (assoc_op, 1, (assoc_op, 2, 3), 4),
+        (assoc_op, 1, (assoc_op, 2, 3, 4)),
+        (assoc_op, 1, 2, (assoc_op, 3, 4)),
+        (assoc_op, 1, 2, 3, 4),
     }
     res = run(0, x, eq_assoc((assoc_op, 1, 2, 3, 4), x))
     assert sorted(res, key=str) == sorted(expected_res, key=str)
@@ -790,7 +811,7 @@ def test_eq_assoccomm_objects():
 
 @pytest.mark.xfail(strict=False)
 @pytest.mark.timeout(5)
-def test_eq_assoccom_scaling():
+def test_eq_assoccomm_scaling():
 
     commutative.index.clear()
     commutative.facts.clear()
@@ -805,7 +826,6 @@ def test_eq_assoccom_scaling():
     fact(commutative, mul)
     fact(associative, mul)
 
-    # TODO: Make a low-depth term inequal (e.g. inequal at base)
     import random
 
     from tests.utils import generate_term
@@ -814,6 +834,7 @@ def test_eq_assoccom_scaling():
 
     test_graph = generate_term((add, mul), range(4), 5)
 
+    # Make a low-depth term inequal (e.g. inequal at base):
     # Change the root operator
     test_graph_2 = list(test_graph)
     test_graph_2[0] = add if test_graph_2[0] == mul else mul
