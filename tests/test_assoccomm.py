@@ -1,27 +1,24 @@
-import pytest
-
 from collections.abc import Sequence
 
-from etuples.core import etuple
-
+import pytest
 from cons import cons
+from etuples.core import etuple
+from unification import isvar, reify, unify, var
 
-from unification import reify, var, isvar, unify
-
-from kanren.core import run
-from kanren.facts import fact
 from kanren.assoccomm import (
+    assoc_args,
+    assoc_flatten,
     associative,
     commutative,
-    eq_assoc_args,
-    eq_comm,
     eq_assoc,
+    eq_assoc_args,
     eq_assoccomm,
-    assoc_args,
+    eq_comm,
     flatten_assoc_args,
-    assoc_flatten,
 )
-from kanren.term import operator, arguments, term
+from kanren.core import run
+from kanren.facts import fact
+from kanren.term import arguments, operator, term
 
 
 class Node(object):
@@ -214,8 +211,14 @@ def test_assoc_args():
     def op_pred(x):
         return x == op
 
-    assert tuple(assoc_args(op, (1, 2, 3), 2)) == (((op, 1, 2), 3), (1, (op, 2, 3)),)
-    assert tuple(assoc_args(op, [1, 2, 3], 2)) == ([[op, 1, 2], 3], [1, [op, 2, 3]],)
+    assert tuple(assoc_args(op, (1, 2, 3), 2)) == (
+        ((op, 1, 2), 3),
+        (1, (op, 2, 3)),
+    )
+    assert tuple(assoc_args(op, [1, 2, 3], 2)) == (
+        [[op, 1, 2], 3],
+        [1, [op, 2, 3]],
+    )
     assert tuple(assoc_args(op, (1, 2, 3), 1)) == (
         ((op, 1), 2, 3),
         (1, (op, 2), 3),
@@ -295,19 +298,28 @@ def test_eq_assoc_args():
             0,
             True,
             eq_assoc_args(
-                assoc_op, (1, (assoc_op, 2, 3)), (1, (assoc_op, 2, 3)), no_ident=True,
+                assoc_op,
+                (1, (assoc_op, 2, 3)),
+                (1, (assoc_op, 2, 3)),
+                no_ident=True,
             ),
         )
         == ()
     )
 
-    assert run(
-        0,
-        True,
-        eq_assoc_args(
-            assoc_op, (1, (assoc_op, 2, 3)), ((assoc_op, 1, 2), 3), no_ident=True,
-        ),
-    ) == (True,)
+    assert (
+        run(
+            0,
+            True,
+            eq_assoc_args(
+                assoc_op,
+                (1, (assoc_op, 2, 3)),
+                ((assoc_op, 1, 2), 3),
+                no_ident=True,
+            ),
+        )
+        == (True,)
+    )
 
 
 def test_eq_assoc():
@@ -395,24 +407,37 @@ def test_assoc_flatten():
     fact(commutative, mul)
     fact(associative, mul)
 
-    assert run(
-        0,
-        True,
-        assoc_flatten((mul, 1, (add, 2, 3), (mul, 4, 5)), (mul, 1, (add, 2, 3), 4, 5)),
-    ) == (True,)
-
-    x = var()
-    assert run(0, x, assoc_flatten((mul, 1, (add, 2, 3), (mul, 4, 5)), x),) == (
-        (mul, 1, (add, 2, 3), 4, 5),
+    assert (
+        run(
+            0,
+            True,
+            assoc_flatten(
+                (mul, 1, (add, 2, 3), (mul, 4, 5)), (mul, 1, (add, 2, 3), 4, 5)
+            ),
+        )
+        == (True,)
     )
 
-    assert run(
-        0,
-        True,
-        assoc_flatten(
-            ("op", 1, (add, 2, 3), (mul, 4, 5)), ("op", 1, (add, 2, 3), (mul, 4, 5))
-        ),
-    ) == (True,)
+    x = var()
+    assert (
+        run(
+            0,
+            x,
+            assoc_flatten((mul, 1, (add, 2, 3), (mul, 4, 5)), x),
+        )
+        == ((mul, 1, (add, 2, 3), 4, 5),)
+    )
+
+    assert (
+        run(
+            0,
+            True,
+            assoc_flatten(
+                ("op", 1, (add, 2, 3), (mul, 4, 5)), ("op", 1, (add, 2, 3), (mul, 4, 5))
+            ),
+        )
+        == (True,)
+    )
 
     assert run(0, x, assoc_flatten(("op", 1, (add, 2, 3), (mul, 4, 5)), x)) == (
         ("op", 1, (add, 2, 3), (mul, 4, 5)),
@@ -494,8 +519,14 @@ def test_eq_assoccomm():
     exp_res_form = (
         (etuple(op_lv, x, y), etuple(op_lv, y, x)),
         (y, y),
-        (etuple(etuple(op_lv, x, y)), etuple(etuple(op_lv, y, x)),),
-        (etuple(op_lv, x, y, z), etuple(op_lv, etuple(op_lv, x, y), z),),
+        (
+            etuple(etuple(op_lv, x, y)),
+            etuple(etuple(op_lv, y, x)),
+        ),
+        (
+            etuple(op_lv, x, y, z),
+            etuple(op_lv, etuple(op_lv, x, y), z),
+        ),
     )
 
     for a, b in zip(res, exp_res_form):

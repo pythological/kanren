@@ -1,17 +1,15 @@
 from functools import partial
 
-from unification import var, isvar
-from unification import reify
-
 from etuples import etuple
+from unification import isvar, reify, var
 
-from .core import eq, conde, lall, succeed, Zzz, fail, ground_order
+from .core import Zzz, conde, eq, fail, ground_order, lall, succeed
 from .goals import conso, nullo
 from .term import applyo
 
 
 def mapo(relation, a, b, null_type=list, null_res=True, first=True):
-    """Apply a relation to corresponding elements in two sequences and succeed if the relation succeeds for all pairs."""
+    """Apply a relation to corresponding elements in two sequences and succeed if the relation succeeds for all pairs."""  # noqa: E501
 
     b_car, b_cdr = var(), var()
     a_car, a_cdr = var(), var()
@@ -38,7 +36,7 @@ def map_anyo(
        An object that's a valid cdr for the collection type desired.  If
        `False` (i.e. the default value), the cdr will be inferred from the
        inputs, or defaults to an empty list.
-    """
+    """  # noqa: E501
 
     b_car, b_cdr = var(), var()
     a_car, a_cdr = var(), var()
@@ -194,7 +192,9 @@ def walko(
 
         g = conde(
             # TODO: Use `Zzz`, if needed.
-            [goal(graph_in_rf, graph_out_rf),],
+            [
+                goal(graph_in_rf, graph_out_rf),
+            ],
             [
                 lall(
                     applyo(rator_in, rands_in, graph_in_rf),

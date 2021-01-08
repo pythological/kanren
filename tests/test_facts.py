@@ -1,6 +1,6 @@
 from unification import var
 
-from kanren.core import run, conde
+from kanren.core import conde, run
 from kanren.facts import Relation, fact, facts
 
 

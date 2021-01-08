@@ -1,23 +1,21 @@
-from pytest import raises
-
 from itertools import permutations
 
-from unification import var, unify, reify
+from cons import cons
+from pytest import raises
+from unification import reify, unify, var
 from unification.core import _reify, stream_eval
 
-from cons import cons
-
-from kanren import run, eq, conde
-from kanren.goals import membero
-from kanren.core import lconj
+from kanren import conde, eq, run
 from kanren.constraints import (
     ConstrainedState,
-    DisequalityStore,
     ConstrainedVar,
+    DisequalityStore,
+    isinstanceo,
     neq,
     typeo,
-    isinstanceo,
 )
+from kanren.core import lconj
+from kanren.goals import membero
 
 
 def test_ConstrainedState():

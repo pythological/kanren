@@ -3,13 +3,11 @@ Based off
 https://github.com/holtchesley/embedded-logic/blob/master/kanren/sudoku.ipynb
 """
 import pytest
-
 from unification import var
 
 from kanren import run
 from kanren.core import lall
 from kanren.goals import permuteq
-
 
 DIGITS = tuple(range(1, 10))
 

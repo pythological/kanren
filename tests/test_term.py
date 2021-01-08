@@ -1,10 +1,9 @@
-from unification import var, unify, reify
-
 from cons import cons
 from etuples import etuple
+from unification import reify, unify, var
 
 from kanren.core import run
-from kanren.term import arguments, operator, term, unifiable_with_term, applyo
+from kanren.term import applyo, arguments, operator, term, unifiable_with_term
 
 
 @unifiable_with_term

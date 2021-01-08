@@ -1,7 +1,7 @@
-from unification import unify, reify
+from toolz import merge
+from unification import reify, unify
 
 from .util import intersection
-from toolz import merge
 
 
 class Relation(object):
@@ -55,7 +55,7 @@ class Relation(object):
             The goal to evaluate. This consists of vars and values to match
             facts against.
 
-        """
+        """  # noqa: E501
 
         def goal(substitution):
             args2 = reify(args, substitution)
@@ -105,5 +105,5 @@ def facts(rel, *lists):
     >>> run(1, x, parent(x, "Bart"))
     ('Homer',)
     """
-    for l in lists:
-        fact(rel, *l)
+    for lst in lists:
+        fact(rel, *lst)

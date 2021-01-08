@@ -1,13 +1,13 @@
 from pytest import raises
 
 from kanren.util import (
-    unique,
-    intersection,
-    groupsizes,
-    dicthash,
-    hashable,
-    multihash,
     FlexibleSet,
+    dicthash,
+    groupsizes,
+    hashable,
+    intersection,
+    multihash,
+    unique,
 )
 
 

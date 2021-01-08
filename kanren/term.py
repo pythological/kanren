@@ -1,11 +1,11 @@
-from collections.abc import Sequence, Mapping
+from collections.abc import Mapping, Sequence
 
-from unification.core import reify, _unify, _reify, construction_sentinel
+from cons.core import ConsError, cons
+from etuples import apply as term
+from etuples import rands as arguments
+from etuples import rator as operator
+from unification.core import _reify, _unify, construction_sentinel, reify
 from unification.variable import isvar
-
-from cons.core import cons, ConsError
-
-from etuples import apply as term, rands as arguments, rator as operator
 
 from .core import eq, lall
 from .goals import conso
@@ -18,7 +18,7 @@ def applyo(o_rator, o_rands, obj):
     `rator`, `rands`, and `apply` dispatch functions from `etuples`, so
     implement/override those to get the desired behavior.
 
-    """
+    """  # noqa: E501
 
     def applyo_goal(S):
         nonlocal o_rator, o_rands, obj
