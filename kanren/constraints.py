@@ -1,14 +1,11 @@
 import weakref
-
 from abc import ABC, abstractmethod
 from collections import UserDict
 from collections.abc import Mapping
 
-from toolz import groupby
-
 from cons.core import ConsPair
-
-from unification import unify, reify, Var, var
+from toolz import groupby
+from unification import Var, reify, unify, var
 from unification.core import _reify, isground
 from unification.utils import transitive_get as walk
 
@@ -82,7 +79,7 @@ class ConstraintStore(ABC):
 
 
 class ConstrainedState(UserDict):
-    """A miniKanren state that holds unifications of logic variables and upholds constraints on logic variables."""
+    """A miniKanren state that holds unifications of logic variables and upholds constraints on logic variables."""  # noqa: E501
 
     __slots__ = ("constraints",)
 
@@ -305,7 +302,7 @@ class PredicateStore(ConstraintStore, ABC):
 
     @abstractmethod
     def constraint_isground(self, lv, lvar_map):
-        """Check whether or not the constrained term is "ground enough" to be checked."""
+        """Check whether or not the constrained term is "ground enough" to be checked."""  # noqa: E501
         raise NotImplementedError()
 
     def post_unify_check(self, lvar_map, lvar=None, value=None, old_state=None):

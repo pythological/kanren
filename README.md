@@ -11,11 +11,24 @@ Using `pip`:
 pip install miniKanren
 ```
 
-To install from source:
+## Development
+
+First obtain the project source:
 ```bash
 git clone git@github.com:pythological/kanren.git
 cd kanren
-pip install -r requirements.txt
+```
+
+Install the development dependencies:
+
+```bash
+$ pip install -r requirements.txt
+```
+
+Set up `pre-commit` hooks:
+
+```bash
+$ pre-commit install --install-hooks
 ```
 
 Tests can be run with the provided `Makefile`:

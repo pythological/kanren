@@ -1,20 +1,15 @@
-from operator import length_hint
-from functools import partial
-from itertools import permutations
 from collections import Counter
 from collections.abc import Sequence
+from functools import partial
+from itertools import permutations
+from operator import length_hint
 
 from cons import cons
 from cons.core import ConsNull, ConsPair
 from unification import reify, var
 from unification.core import isground
 
-from .core import (
-    eq,
-    conde,
-    lall,
-    lany,
-)
+from .core import conde, eq, lall, lany
 
 
 def heado(head, coll):
@@ -39,9 +34,9 @@ def tailo(tail, coll):
     return eq(cons(var(), tail), coll)
 
 
-def conso(h, t, l):
+def conso(h, t, r):
     """Construct a goal stating that cons h + t == l."""
-    return eq(cons(h, t), l)
+    return eq(cons(h, t), r)
 
 
 def nullo(*args, refs=None, default_ConsNull=list):
@@ -105,7 +100,7 @@ def nullo(*args, refs=None, default_ConsNull=list):
     return nullo_goal
 
 
-def itero(l, nullo_refs=None, default_ConsNull=list):
+def itero(lst, nullo_refs=None, default_ConsNull=list):
     """Construct a goal asserting that a term is an iterable type.
 
     This is a generic version of the standard `listo` that accounts for
@@ -115,8 +110,8 @@ def itero(l, nullo_refs=None, default_ConsNull=list):
     """
 
     def itero_goal(S):
-        nonlocal l, nullo_refs, default_ConsNull
-        l_rf = reify(l, S)
+        nonlocal lst, nullo_refs, default_ConsNull
+        l_rf = reify(lst, S)
         c, d = var(), var()
         g = conde(
             [nullo(l_rf, refs=nullo_refs, default_ConsNull=default_ConsNull)],
@@ -143,17 +138,17 @@ def membero(x, ls):
     return membero_goal
 
 
-def appendo(l, s, out, default_ConsNull=list):
-    """Construct a goal for the relation l + s = ls.
+def appendo(lst, s, out, default_ConsNull=list):
+    """Construct a goal for the relation lst + s = ls.
 
     See Byrd thesis pg. 247
     https://scholarworks.iu.edu/dspace/bitstream/handle/2022/8777/Byrd_indiana_0093A_10344.pdf
     """
 
     def appendo_goal(S):
-        nonlocal l, s, out
+        nonlocal lst, s, out
 
-        l_rf, s_rf, out_rf = reify((l, s, out), S)
+        l_rf, s_rf, out_rf = reify((lst, s, out), S)
 
         a, d, res = var(prefix="a"), var(prefix="d"), var(prefix="res")
 
@@ -165,7 +160,7 @@ def appendo(l, s, out, default_ConsNull=list):
                 _nullo(s_rf, l_rf, out_rf),
             ],
             [
-                # `l` is empty
+                # `lst` is empty
                 conso(a, d, out_rf),
                 eq(s_rf, out_rf),
                 _nullo(l_rf, refs=(s_rf, out_rf)),
@@ -182,21 +177,27 @@ def appendo(l, s, out, default_ConsNull=list):
     return appendo_goal
 
 
-def rembero(x, l, o, default_ConsNull=list):
-    """Remove the first occurrence of `x` in `l` resulting in `o`."""
+def rembero(x, lst, o, default_ConsNull=list):
+    """Remove the first occurrence of `x` in `lst` resulting in `o`."""
 
     from .constraints import neq
 
     def rembero_goal(s):
-        nonlocal x, l, o
+        nonlocal x, lst, o
 
-        x_rf, l_rf, o_rf = reify((x, l, o), s)
+        x_rf, l_rf, o_rf = reify((x, lst, o), s)
 
         l_car, l_cdr, r = var(), var(), var()
 
         g = conde(
-            [nullo(l_rf, o_rf, default_ConsNull=default_ConsNull),],
-            [conso(l_car, l_cdr, l_rf), eq(x_rf, l_car), eq(l_cdr, o_rf),],
+            [
+                nullo(l_rf, o_rf, default_ConsNull=default_ConsNull),
+            ],
+            [
+                conso(l_car, l_cdr, l_rf),
+                eq(x_rf, l_car),
+                eq(l_cdr, o_rf),
+            ],
             [
                 conso(l_car, l_cdr, l_rf),
                 neq(l_car, x),

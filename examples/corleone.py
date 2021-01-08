@@ -7,7 +7,6 @@ import toolz
 
 from kanren import Relation, conde, facts, run, var
 
-
 father = Relation()
 mother = Relation()
 

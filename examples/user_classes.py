@@ -1,9 +1,10 @@
+from operator import add, gt, sub
+
 from account import Account
 
 from kanren import membero, run, unifiable, var
 from kanren.core import lall
-from kanren.term import term
-
+from kanren.term import term  # noqa: F401
 
 unifiable(Account)  # Register Account class
 
@@ -27,7 +28,9 @@ target = Account(first, last, ident, newbalance)
 theorists = ("Adam", "Carl")
 # Give $10 to theorists
 theorist_bonus = lall(
-    membero(source, accounts), membero(first, theorists), add(10, balance, newbalance),
+    membero(source, accounts),
+    membero(first, theorists),
+    add(10, balance, newbalance),
 )
 
 # Take $10 from anyone with more than $100

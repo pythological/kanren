@@ -1,26 +1,24 @@
+from collections.abc import Iterator
 from itertools import count
 
-from pytest import raises
-
-from collections.abc import Iterator
-
 from cons import cons
+from pytest import raises
 from unification import var
 
 from kanren.core import (
-    run,
-    fail,
-    eq,
     conde,
+    eq,
+    fail,
+    ground_order,
+    ifa,
+    lall,
+    lany,
     lconj,
     lconj_seq,
     ldisj,
     ldisj_seq,
-    lany,
-    lall,
-    ifa,
+    run,
     succeed,
-    ground_order,
 )
 
 
@@ -113,7 +111,10 @@ def test_conde_basics():
     res = list(
         conde(
             [eq(1, a), conde([eq(11, aa)], [eq(12, ab)])],
-            [eq(1, b), conde([eq(111, ba), eq(112, bb)], [eq(121, bc)]),],
+            [
+                eq(1, b),
+                conde([eq(111, ba), eq(112, bb)], [eq(121, bc)]),
+            ],
         )({})
     )
     assert res == [
@@ -234,12 +235,15 @@ def test_ifa():
         == ()
     )
 
-    assert run(
-        0,
-        y,
-        eq(x, True),
-        ifa(lall(eq(x, True), eq(y, 1)), lall(eq(x, True), eq(y, 2))),
-    ) == (1,)
+    assert (
+        run(
+            0,
+            y,
+            eq(x, True),
+            ifa(lall(eq(x, True), eq(y, 1)), lall(eq(x, True), eq(y, 2))),
+        )
+        == (1,)
+    )
 
 
 def test_ground_order():

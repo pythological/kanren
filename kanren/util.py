@@ -1,7 +1,6 @@
-from itertools import chain
 from collections import namedtuple
-from collections.abc import Hashable, MutableSet, Set, Mapping, Iterable
-
+from collections.abc import Hashable, Iterable, Mapping, MutableSet, Set
+from itertools import chain
 
 HashableForm = namedtuple("HashableForm", ["type", "data"])
 

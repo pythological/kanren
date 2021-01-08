@@ -1,22 +1,20 @@
 import pytest
-
-from unification import var, isvar, unify
-
 from cons import cons
 from cons.core import ConsPair
+from unification import isvar, unify, var
 
+from kanren.core import conde, eq, run
 from kanren.goals import (
-    tailo,
-    heado,
     appendo,
     conso,
-    nullo,
+    heado,
     itero,
     membero,
-    rembero,
+    nullo,
     permuteo,
+    rembero,
+    tailo,
 )
-from kanren.core import eq, run, conde
 
 
 def results(g, s=None):

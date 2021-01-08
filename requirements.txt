@@ -9,3 +9,5 @@ black>=19.3b0; platform.python_implementation!='PyPy'
 diff-cover
 sympy
 versioneer
+coverage>=5.1
+pre-commit

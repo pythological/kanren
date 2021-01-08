@@ -1,21 +1,17 @@
-import pytest
-
-import toolz
-
-from operator import add, mul
 from functools import partial
+from math import exp, log
 from numbers import Real
-from math import log, exp
+from operator import add, mul
 
-from unification import var, unify, isvar, reify
-
-from etuples.core import etuple, ExpressionTuple
-
+import pytest
+import toolz
 from cons import cons
+from etuples.core import ExpressionTuple, etuple
+from unification import isvar, reify, unify, var
 
-from kanren import run, eq, conde, lall
+from kanren import conde, eq, lall, run
 from kanren.constraints import isinstanceo
-from kanren.graph import reduceo, map_anyo, walko, mapo, eq_length
+from kanren.graph import eq_length, map_anyo, mapo, reduceo, walko
 
 
 class OrderedFunction(object):
@@ -241,7 +237,12 @@ def test_map_anyo_misc():
     [
         ([], ()),
         ([1], ()),
-        ([etuple(add, 1, 1),], ([etuple(mul, 2, 1)],)),
+        (
+            [
+                etuple(add, 1, 1),
+            ],
+            ([etuple(mul, 2, 1)],),
+        ),
         ([1, etuple(add, 1, 1)], ([1, etuple(mul, 2, 1)],)),
         ([etuple(add, 1, 1), 1], ([etuple(mul, 2, 1), 1],)),
         (
@@ -249,7 +250,10 @@ def test_map_anyo_misc():
             ([etuple(mul, 2, 1), etuple(mul, 2, 1), 1],),
         ),
         (
-            [etuple(add, 1, 1), etuple(log, etuple(exp, 5)),],
+            [
+                etuple(add, 1, 1),
+                etuple(log, etuple(exp, 5)),
+            ],
             (
                 [etuple(mul, 2, 1), 5],
                 [etuple(add, 1, 1), 5],
@@ -261,7 +265,11 @@ def test_map_anyo_misc():
 def test_map_anyo(test_input, test_output):
     """Test `map_anyo` with fully ground terms (i.e. no logic variables)."""
     q_lv = var()
-    test_res = run(0, q_lv, map_anyo(math_reduceo, test_input, q_lv),)
+    test_res = run(
+        0,
+        q_lv,
+        map_anyo(math_reduceo, test_input, q_lv),
+    )
 
     assert len(test_res) == len(test_output)
 
@@ -280,7 +288,7 @@ def test_map_anyo(test_input, test_output):
 
 
 def test_map_anyo_reverse():
-    """Test `map_anyo` in "reverse" (i.e. specify the reduced form and generate the un-reduced form)."""
+    """Test `map_anyo` in "reverse" (i.e. specify the reduced form and generate the un-reduced form)."""  # noqa: E501
     # Unbounded reverse
     q_lv = var()
     rev_input = [etuple(mul, 2, 1)]
@@ -306,7 +314,9 @@ def test_map_anyo_reverse():
 
     # Guided reverse
     test_res = run(
-        4, q_lv, map_anyo(math_reduceo, [etuple(add, q_lv, 1)], [etuple(mul, 2, 1)]),
+        4,
+        q_lv,
+        map_anyo(math_reduceo, [etuple(add, q_lv, 1)], [etuple(mul, 2, 1)]),
     )
 
     assert test_res == (1,)
@@ -327,7 +337,15 @@ def test_walko_misc():
     def one_to_threeo(x, y):
         return conde([eq(x, 1), eq(y, 3)])
 
-    res = run(1, q_lv, walko(one_to_threeo, [1, [1, 2, 4], 2, [[4, 1, 1]], 1], q_lv,),)
+    res = run(
+        1,
+        q_lv,
+        walko(
+            one_to_threeo,
+            [1, [1, 2, 4], 2, [[4, 1, 1]], 1],
+            q_lv,
+        ),
+    )
     assert res == ([3, [3, 2, 4], 2, [[4, 3, 3]], 3],)
 
     assert run(2, q_lv, walko(eq, q_lv, q_lv, null_type=ExpressionTuple)) == (
@@ -417,7 +435,7 @@ def test_walko(test_input, test_output):
 
 
 def test_walko_reverse():
-    """Test `walko` in "reverse" (i.e. specify the reduced form and generate the un-reduced form)."""
+    """Test `walko` in "reverse" (i.e. specify the reduced form and generate the un-reduced form)."""  # noqa: E501
     q_lv = var("q")
 
     test_res = run(2, q_lv, term_walko(math_reduceo, q_lv, 5))

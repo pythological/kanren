@@ -28,21 +28,19 @@ be used in the computer algebra systems SymPy and Theano.
 >>> print(run(0, (x,y), eq(pattern, expr)))
 ((3, 2),)
 """
-from functools import partial
-from operator import length_hint, eq as equal
 from collections.abc import Sequence
-
-from toolz import sliding_window
-
-from unification import reify, unify, var
+from functools import partial
+from operator import eq as equal
+from operator import length_hint
 
 from cons.core import ConsPair, car, cdr
-
 from etuples import etuple
+from toolz import sliding_window
+from unification import reify, unify, var
 
 from .core import conde, eq, ground_order, lall, succeed
-from .goals import itero, permuteo
 from .facts import Relation
+from .goals import itero, permuteo
 from .graph import term_walko
 from .term import term
 
@@ -68,7 +66,7 @@ def assoc_args(rator, rands, n, ctor=None):
     >>> from kanren.assoccomm import assoc_args
     >>> list(assoc_args('op', [1, 2, 3], 2))
     [[['op', 1, 2], 3], [1, ['op', 2, 3]]]
-    """
+    """  # noqa: E501
     assert n > 0
 
     rands_l = list(rands)
@@ -96,7 +94,7 @@ def eq_assoc_args(
     This is a non-relational utility goal.  It does assumes that the op and at
     least one set of arguments are ground under the state in which it is
     evaluated.
-    """
+    """  # noqa: E501
     u_args, v_args = var(), var()
 
     def eq_assoc_args_goal(S):

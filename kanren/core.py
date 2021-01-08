@@ -1,13 +1,12 @@
+from collections.abc import Generator, Sequence
+from functools import partial, reduce
 from itertools import tee
 from operator import length_hint
-from functools import partial, reduce
-from collections.abc import Sequence, Generator
 
 from cons.core import ConsPair
-from unification import reify, unify, isvar
-from unification.core import isground
-
 from toolz import interleave, take
+from unification import isvar, reify, unify
+from unification.core import isground
 
 
 def fail(s):
@@ -40,7 +39,7 @@ def ldisj_seq(goals):
     """Produce a goal that returns the appended state stream from all successful goal arguments.
 
     In other words, it behaves like logical disjunction/OR for goals.
-    """
+    """  # noqa: E501
 
     if length_hint(goals, -1) == 0:
         return succeed
@@ -66,7 +65,7 @@ def lconj_seq(goals):
     """Produce a goal that returns the appended state stream in which all goals are necessarily successful.
 
     In other words, it behaves like logical conjunction/AND for goals.
-    """
+    """  # noqa: E501
 
     if length_hint(goals, -1) == 0:
         return succeed
@@ -126,7 +125,7 @@ def ground_order_key(S, x):
 
 
 def ground_order(in_args, out_args):
-    """Construct a non-relational goal that orders a list of terms based on groundedness (grounded precede ungrounded)."""
+    """Construct a non-relational goal that orders a list of terms based on groundedness (grounded precede ungrounded)."""  # noqa: E501
 
     def ground_order_goal(S):
         nonlocal in_args, out_args
