@@ -57,7 +57,7 @@ Multiple logic variables and goals can be used simultaneously.  The following co
 >>> z = var()
 >>> run(1, [x, z], eq(x, z),
                    eq(z, 3))
-([3, 4],)
+([3, 3],)
 ```
 
 `kanren` uses [unification](http://en.wikipedia.org/wiki/Unification_%28computer_science%29) to match forms within expression trees.  The following code asks for values of `x` such that `(1, 2) == (1, x)`:
