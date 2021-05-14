@@ -4,7 +4,6 @@ Based on miniKanren examples provided by Jason Hemann.
 """
 import ast
 from collections.abc import Mapping
-from numbers import Number
 from typing import Callable, Dict, List, Tuple, _GenericAlias, _type_check
 
 from cons import cons
@@ -148,19 +147,17 @@ def turnstileo(x_env, t_env, e, t):
         Type of `e`.
 
     """
-    new_x_env_var, new_t_env_var = var(prefix="new_x_env"), var(prefix="new_t_env")
     nc_value_var = var()
     num_n_var = var()
     str_s_var = var()
     elts_var = var()
     keys_var, values_var = vars(2)
-    fname_var, fargs_var, fbody_var = (
-        var(prefix="fname"),
-        var(prefix="fargs"),
-        var(prefix="fbody"),
-    )
-    tx_var, tb_var = var(prefix="tx"), var(prefix="tb")
     rvalue_var = var()
+    test_var, if_body_var, orelse_var = (
+        var(prefix="test"),
+        var(prefix="if_body"),
+        var(prefix="or_else"),
+    )
 
     return conde(
         [
@@ -173,9 +170,15 @@ def turnstileo(x_env, t_env, e, t):
             Zzz(turnstileo, x_env, t_env, rvalue_var, t),
         ],
         [
+            eq(e, ast.Expr(value=rvalue_var)),
+            Zzz(turnstileo, x_env, t_env, rvalue_var, t),
+        ],
+        [
             eq(e, ast.Num(n=num_n_var)),
-            isinstanceo(num_n_var, Number),
-            eq(int, t),
+            conde(
+                [isinstanceo(num_n_var, int), eq(t, int)],
+                [isinstanceo(num_n_var, float), eq(t, float)],
+            ),
         ],
         [
             eq(e, ast.Str(s=str_s_var)),
@@ -204,64 +207,15 @@ def turnstileo(x_env, t_env, e, t):
         ],
         [
             # A function definition
-            eq(
-                e,
-                ast.FunctionDef(
-                    name=fname_var,
-                    args=ast.arguments(
-                        args=fargs_var,
-                        vararg=None,
-                        kwonlyargs=[],
-                        kw_defaults=[],
-                        kwarg=None,
-                        defaults=[],
-                    ),
-                    body=[fbody_var],
-                    decorator_list=var(),
-                    returns=var(),
-                ),
-            ),
-            # The type of this statement is `Callable`
-            eq(create_callable([tx_var], tb_var), t),
-            # State that `fargs_var` must be an `ast.arg` type
-            lapplyo(lambda x: eq(x, ast.arg(arg=var(), annotation=var())), fargs_var),
-            #
-            # Update the typing contexts
-            #
-            # Add every argument to the typing context
-            appendo(fargs_var, x_env, new_x_env_var),
-            # TODO: Handle multiple arguments and function body statements.
-            # lapplyo(
-            #     lambda x: tunstileo(new_x_env_var, new_y_env_var, x, var()), fargs_var
-            # ),
-            conso(cons("mono", tx_var), t_env, new_t_env_var),
-            Zzz(
-                turnstileo,
-                new_x_env_var,
-                new_t_env_var,
-                fbody_var,
-                tb_var,
-            ),
-        ]
-        #
-        # Conditional form:
-        # If(test=Name(id='cond', ctx=Load()), body=[Pass()],
-        # orelse=[If(test=Name(id='cond2', ctx=Load()), body=[Pass()],
-        # orelse=[Pass()])])
-        # [(fresh (te ce ae)
-        #    (== `(if ,te ,ce ,ae) e)
-        #    (absento 'if Γx)
-        #    (⊢ Γx Γτ te '𝔹)
-        #    (⊢ Γx Γτ ce τ)
-        #    (⊢ Γx Γτ ae τ))]
-        # [(fresh (x b τx τb)
-        #    ;; we split the environment to facilitate shadow checking
-        #    (absento 'lambda Γx)
-        #    (symbolo x)
-        #    (== `(lambda (,x) ,b) e)
-        #    (== `(,τx → ,τb) τ)
-        #    (⊢ `(,x . ,Γx) `((mono . ,τx) . ,Γτ) b τb))]
-        #
+            type_def_form(x_env, t_env, e, t)
+        ],
+        [
+            # A conditional statement
+            eq(e, ast.If(test=test_var, body=if_body_var, orelse=orelse_var)),
+            Zzz(turnstileo, x_env, t_env, test_var, bool),
+            Zzz(turnstileo, x_env, t_env, if_body_var, t),
+            Zzz(turnstileo, x_env, t_env, orelse_var, t),
+        ],
         # Lambda definition:
         # Lambda(args=arguments(args=[arg(arg='x', annotation=None)],
         # vararg=None, kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[]),
@@ -284,14 +238,82 @@ def turnstileo(x_env, t_env, e, t):
         #    (⊢ Γx Γτ e₂ τx))]
         #     [(fresh [e1 e2]
         #
-        # Addition function:
-        # Expr(value=BinOp(left=Num(n=1), op=Add(), right=Num(n=1)))
-        # [(fresh (ne₁ ne₂)
-        #    (== `(+ ,ne₁ ,ne₂) e)
-        #    (absento '+ Γx)
-        #    (== 'ℕ τ)
-        #    (⊢ Γx Γτ ne₁ 'ℕ)
-        #    (⊢ Γx Γτ ne₂ 'ℕ))]
+        [type_add_form(x_env, t_env, e, t)],
+    )
+
+
+def type_def_form(x_env, t_env, e, t):
+    new_x_env_var, new_t_env_var = var(prefix="new_x_env"), var(prefix="new_t_env")
+    fname_var, fargs_var, fbody_var = (
+        var(prefix="fname"),
+        var(prefix="fargs"),
+        var(prefix="fbody"),
+    )
+    tx_var, tb_var = var(prefix="tx"), var(prefix="tb")
+    return lall(
+        eq(
+            e,
+            ast.FunctionDef(
+                name=fname_var,
+                args=ast.arguments(
+                    args=fargs_var,
+                    vararg=None,
+                    kwonlyargs=[],
+                    kw_defaults=[],
+                    kwarg=None,
+                    defaults=[],
+                ),
+                body=[fbody_var],
+                decorator_list=var(),
+                returns=var(),
+            ),
+        ),
+        # The type of this statement is `Callable`
+        eq(create_callable([tx_var], tb_var), t),
+        # State that `fargs_var` must be an `ast.arg` type
+        lapplyo(lambda x: eq(x, ast.arg(arg=var(), annotation=var())), fargs_var),
+        #
+        # Update the typing contexts
+        #
+        # Add every argument to the typing context
+        appendo(fargs_var, x_env, new_x_env_var),
+        # TODO: Handle multiple arguments and function body statements.
+        # lapplyo(
+        #     lambda x: tunstileo(new_x_env_var, new_y_env_var, x, var()), fargs_var
+        # ),
+        conso(cons("mono", tx_var), t_env, new_t_env_var),
+        Zzz(
+            turnstileo,
+            new_x_env_var,
+            new_t_env_var,
+            fbody_var,
+            tb_var,
+        ),
+    )
+
+
+def symmetrize(relation, x, y, a, b):
+    return conde(
+        [relation(x, a), relation(y, b)], [neq(x, y), relation(x, b), relation(y, a)]
+    )
+
+
+def type_add_form(x_env, t_env, e, t):
+    left_var, right_var = var(prefix="left"), var(prefix="right")
+    left_type_var, right_type_var = var(), var()
+    return lall(
+        eq(e, ast.BinOp(left=left_var, op=ast.Add(), right=right_var)),
+        Zzz(turnstileo, x_env, t_env, left_var, left_type_var),
+        Zzz(turnstileo, x_env, t_env, right_var, right_type_var),
+        conde(
+            [symmetrize(eq, left_type_var, right_type_var, int, int), eq(t, int)],
+            [symmetrize(eq, left_type_var, right_type_var, int, float), eq(t, float)],
+            [symmetrize(eq, left_type_var, right_type_var, int, bool), eq(t, int)],
+            [symmetrize(eq, left_type_var, right_type_var, float, bool), eq(t, float)],
+            [symmetrize(eq, left_type_var, right_type_var, float, float), eq(t, float)],
+            [symmetrize(eq, left_type_var, right_type_var, bool, bool), eq(t, int)],
+            # TODO: `list` and `tuple` concatenation
+        ),
     )
 
 
@@ -377,7 +399,7 @@ def test_unify_reify_types():
 
 # TODO: Might want to use the pytest timeout plugin and
 # `pytest.mark.timeout(30, method='thread')`.
-def test_turnstileo():
+def test_turnstileo_basic():
     expr_var = var(prefix="expr")
     type_var = var(prefix="type")
     x_env_var = var(prefix="x_env")
@@ -402,8 +424,43 @@ def test_turnstileo():
     res = run(0, type_var, turnstileo([], [], symbol_1, type_var))
     assert res == ()
 
-    expr = ast.parse("def func(x):\n\treturn 1", mode="single").body[0]
+
+def test_turnstileo_add():
+    type_var = var(prefix="type")
+    expr = ast.parse("1 + 1", mode="single").body[0]
+    res = run(
+        0,
+        type_var,
+        turnstileo([], [], expr, type_var),
+    )
+    assert res[0] == int
+
+    expr = ast.parse("1 + True", mode="single").body[0]
     # import astor; print(astor.dump_tree(expr))
+    res = run(
+        0,
+        type_var,
+        turnstileo([], [], expr, type_var),
+    )
+    assert res[0] == int
+
+    expr = ast.parse("1.0 + True", mode="single").body[0]
+    # import astor; print(astor.dump_tree(expr))
+    res = run(
+        0,
+        type_var,
+        turnstileo([], [], expr, type_var),
+    )
+    assert res[0] == float
+
+
+def test_turnstileo_def():
+    type_var = var(prefix="type")
+    # expr_var = var(prefix="expr")
+    # x_env_var = var(prefix="x_env")
+    # t_env_var = var(prefix="t_env")
+
+    expr = ast.parse("def func(x):\n\treturn 1", mode="single").body[0]
 
     res = run(
         0,
@@ -413,3 +470,12 @@ def test_turnstileo():
 
     assert isinstance(res[0], Callable)
     assert res[0].__args__[-1] == int
+
+    expr = ast.parse("def func(y):\n\treturn 1 + 1.0", mode="single").body[0]
+    # import astor; print(astor.dump_tree(expr))
+    res = run(
+        0,
+        type_var,
+        turnstileo([], [], expr, type_var),
+    )
+    assert res[0].__args__[-1] == float
