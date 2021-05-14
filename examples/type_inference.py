@@ -8,6 +8,7 @@ from numbers import Number
 from typing import Callable, Dict, List, Tuple, _GenericAlias, _type_check
 
 from cons import cons
+from etuples import apply, rands, rator
 from unification import reify, unify, var, vars
 from unification.core import _reify, _unify, construction_sentinel
 from unification.variable import Var
@@ -16,6 +17,9 @@ from kanren import conde, eq, lall, run
 from kanren.constraints import isinstanceo, neq
 from kanren.core import Zzz, fail
 from kanren.goals import appendo, conso, nullo
+
+rands.add((ast.AST,), lambda x: tuple(getattr(x, field) for field in x._fields))
+rator.add((ast.AST,), lambda x: type(x))
 
 
 def type_check(x):
@@ -313,6 +317,14 @@ def lookupo(x_env, t_env, x, t):
             [neq(x, y), Zzz(lookupo, x_env_, t_env_, x, t)],
         ),
     )
+
+
+def test_etuples_ast():
+    expr = ast.parse("return 1 + 1", mode="single").body[0]
+    expr2 = apply(rator(expr), rands(expr))
+
+    assert type(expr) == type(expr2)
+    assert all(getattr(expr, field) == getattr(expr, field) for field in expr._fields)
 
 
 def test_unify_reify_ast():
