@@ -9,7 +9,9 @@ class Account(object):
         return (self.first, self.last, self.id, self.balance)
 
     def __eq__(self, other):
-        return self.info() == other.info()
+        if isinstance(other, type(self)):
+            return self.info() == other.info()
+        return False
 
     def __hash__(self):
         return hash((type(self), self.info()))
