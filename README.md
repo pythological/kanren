@@ -11,6 +11,11 @@ Using `pip`:
 pip install miniKanren
 ```
 
+Using `conda`:
+```bash
+conda install -c conda-forge miniKanren
+```
+
 ## Development
 
 First obtain the project source:
