@@ -1,3 +1,5 @@
+import random
+
 from kanren.term import arguments, operator
 
 
@@ -58,3 +60,29 @@ def operator_Node(t):
 # @term.register(Operator, Sequence)
 # def term_Operator(op, args):
 #     return Node(op, args)
+
+
+def generate_term(ops, args, i=10, gen_fn=None):
+
+    if gen_fn is not None:
+
+        gen_res = gen_fn(ops, args, i)
+
+        if gen_res is not None:
+            return gen_res
+
+    g_op = random.choice(ops)
+
+    if i > 0:
+        num_sub_graphs = len(args) // 2
+    else:
+        num_sub_graphs = 0
+
+    g_args = random.sample(args, len(args) - num_sub_graphs)
+    g_args += [
+        generate_term(ops, args, i=i - 1, gen_fn=gen_fn) for s in range(num_sub_graphs)
+    ]
+
+    random.shuffle(g_args)
+
+    return [g_op] + list(g_args)

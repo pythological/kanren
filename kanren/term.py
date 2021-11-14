@@ -1,10 +1,13 @@
 from abc import ABCMeta
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping
+from operator import length_hint
 
-from cons.core import ConsError, cons
+from cons.core import ConsError, ProperSequence, cons
+from etuples import apply
 from etuples import apply as term
 from etuples import rands as arguments
 from etuples import rator as operator
+from multipledispatch import dispatch
 from unification.core import _reify, _unify, construction_sentinel, reify
 from unification.variable import isvar
 
@@ -17,12 +20,19 @@ class TermMetaType(ABCMeta):
 
     def __instancecheck__(self, o):
         o_type = type(o)
-        if any(issubclass(o_type, k) for k in operator.funcs.keys() if k[0] != object):
+        if (
+            isinstance(o, ProperSequence)
+            or any(
+                issubclass(o_type, k) for k in operator.funcs.keys() if k[0] != object
+            )
+        ) and length_hint(o, 1) > 0:
             return True
         return False
 
     def __subclasscheck__(self, o_type):
-        if any(issubclass(o_type, k) for k in operator.funcs.keys() if k[0] != object):
+        if issubclass(o_type, ProperSequence) or any(
+            issubclass(o_type, k) for k in operator.funcs.keys() if k[0] != object
+        ):
             return True
         return False
 
@@ -75,12 +85,17 @@ def applyo(o_rator, o_rands, obj):
     return applyo_goal
 
 
-@term.register(object, Sequence)
-def term_Sequence(rator, rands):
+@dispatch(object, ProperSequence)
+def term(rator, rands):
     # Overwrite the default `apply` dispatch function and make it preserve
     # types
     res = cons(rator, rands)
     return res
+
+
+@term.register(Callable, ProperSequence)
+def term_ExpressionTuple(rator, rands):
+    return apply(rator, rands)
 
 
 def unifiable_with_term(cls):
@@ -108,4 +123,9 @@ def unify_term(u, v, s):
 
 @shallow_ground_order_key.register(Mapping, TermType)
 def shallow_ground_order_key_TermType(S, x):
-    return shallow_ground_order_key(S, cons(operator(x), arguments(x)))
+    if length_hint(x, 1) > 0:
+        return shallow_ground_order_key.dispatch(type(S), object)(
+            S, cons(operator(x), arguments(x))
+        )
+    else:
+        return shallow_ground_order_key.dispatch(type(S), object)(S, x)
