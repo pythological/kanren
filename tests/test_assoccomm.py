@@ -1,5 +1,3 @@
-from collections.abc import Sequence
-
 import pytest
 from cons import cons
 from etuples.core import etuple
@@ -18,60 +16,7 @@ from kanren.assoccomm import (
 )
 from kanren.core import run
 from kanren.facts import fact
-from kanren.term import arguments, operator, term
-
-
-class Node(object):
-    def __init__(self, op, args):
-        self.op = op
-        self.args = args
-
-    def __eq__(self, other):
-        return (
-            type(self) == type(other)
-            and self.op == other.op
-            and self.args == other.args
-        )
-
-    def __hash__(self):
-        return hash((type(self), self.op, self.args))
-
-    def __str__(self):
-        return "%s(%s)" % (self.op.name, ", ".join(map(str, self.args)))
-
-    __repr__ = __str__
-
-
-class Operator(object):
-    def __init__(self, name):
-        self.name = name
-
-
-Add = Operator("add")
-Mul = Operator("mul")
-
-
-def add(*args):
-    return Node(Add, args)
-
-
-def mul(*args):
-    return Node(Mul, args)
-
-
-@term.register(Operator, Sequence)
-def term_Operator(op, args):
-    return Node(op, args)
-
-
-@arguments.register(Node)
-def arguments_Node(n):
-    return n.args
-
-
-@operator.register(Node)
-def operator_Node(n):
-    return n.op
+from tests.utils import Add
 
 
 def results(g, s=None):
@@ -174,15 +119,15 @@ def test_eq_comm():
 
 @pytest.mark.xfail(reason="`applyo`/`buildo` needs to be a constraint.", strict=True)
 def test_eq_comm_object():
-    x = var("x")
+    x = var()
 
     fact(commutative, Add)
     fact(associative, Add)
 
-    assert run(0, x, eq_comm(add(1, 2, 3), add(3, 1, x))) == (2,)
-    assert set(run(0, x, eq_comm(add(1, 2), x))) == set((add(1, 2), add(2, 1)))
-    assert set(run(0, x, eq_assoccomm(add(1, 2, 3), add(1, x)))) == set(
-        (add(2, 3), add(3, 2))
+    assert run(0, x, eq_comm(Add(1, 2, 3), Add(3, 1, x))) == (2,)
+    assert set(run(0, x, eq_comm(Add(1, 2), x))) == set((Add(1, 2), Add(2, 1)))
+    assert set(run(0, x, eq_assoccomm(Add(1, 2, 3), Add(1, x)))) == set(
+        (Add(2, 3), Add(3, 2))
     )
 
 
@@ -575,6 +520,9 @@ def test_assoccomm_objects():
 
     x = var()
 
-    assert run(0, True, eq_assoccomm(add(1, 2, 3), add(3, 1, 2))) == (True,)
-    assert run(0, x, eq_assoccomm(add(1, 2, 3), add(1, 2, x))) == (3,)
-    assert run(0, x, eq_assoccomm(add(1, 2, 3), add(x, 2, 1))) == (3,)
+    assert run(0, True, eq_assoccomm(Add(1, 2, 3), Add(3, 1, 2))) == (True,)
+    # FYI: If `Node` is made `unifiable_with_term` (along with `term`,
+    # `operator`, and `arguments` implementations), you'll get duplicate
+    # results in the following test (i.e. `(3, 3)`).
+    assert run(0, x, eq_assoccomm(Add(1, 2, 3), Add(1, 2, x))) == (3,)
+    assert run(0, x, eq_assoccomm(Add(1, 2, 3), Add(x, 2, 1))) == (3,)
