@@ -1,3 +1,4 @@
+from abc import ABCMeta
 from collections.abc import Mapping, Sequence
 
 from cons.core import ConsError, cons
@@ -9,6 +10,25 @@ from unification.variable import isvar
 
 from .core import eq, lall
 from .goals import conso
+
+
+class TermMetaType(ABCMeta):
+    """A meta type that can be used to check for `operator`/`arguments` support."""
+
+    def __instancecheck__(self, o):
+        o_type = type(o)
+        if any(issubclass(o_type, k) for k in operator.funcs.keys() if k[0] != object):
+            return True
+        return False
+
+    def __subclasscheck__(self, o_type):
+        if any(issubclass(o_type, k) for k in operator.funcs.keys() if k[0] != object):
+            return True
+        return False
+
+
+class TermType(metaclass=TermMetaType):
+    pass
 
 
 def applyo(o_rator, o_rands, obj):
