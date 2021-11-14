@@ -140,11 +140,33 @@ def test_flatten_assoc_args():
 
     res = list(
         flatten_assoc_args(
-            op_pred, [[1, 2, op], 3, [op, 4, [op, [op]]], [op, 5], 6, op, 7]
+            op_pred,
+            [[1, 2, op], 3, [op, 4, [op, [op]]], [op, 5], 6, op, 7],
+            shallow=False,
         )
     )
     exp_res = [[1, 2, op], 3, 4, [op], 5, 6, op, 7]
     assert res == exp_res
+
+    exa_col = (1, 2, ("b", 3, ("a", 4, 5)), ("c", 6, 7), ("a", ("a", 8, 9), 10))
+    assert list(flatten_assoc_args(lambda x: x == "a", exa_col, shallow=False)) == [
+        1,
+        2,
+        ("b", 3, ("a", 4, 5)),
+        ("c", 6, 7),
+        8,
+        9,
+        10,
+    ]
+
+    assert list(flatten_assoc_args(lambda x: x == "a", exa_col, shallow=True)) == [
+        1,
+        2,
+        ("b", 3, ("a", 4, 5)),
+        ("c", 6, 7),
+        ("a", 8, 9),
+        10,
+    ]
 
 
 def test_assoc_args():

@@ -25,12 +25,15 @@ associative = Relation("associative")
 commutative = Relation("commutative")
 
 
-def flatten_assoc_args(op_predicate, items):
+def flatten_assoc_args(op_predicate, items, shallow=True):
     for i in items:
         if isinstance(i, ConsPair) and op_predicate(car(i)):
             i_cdr = cdr(i)
             if length_hint(i_cdr) > 0:
-                yield from flatten_assoc_args(op_predicate, i_cdr)
+                if shallow:
+                    yield from iter(i_cdr)
+                else:
+                    yield from flatten_assoc_args(op_predicate, i_cdr)
             else:
                 yield i
         else:
