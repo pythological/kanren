@@ -18,6 +18,7 @@ from kanren.core import (
     ldisj,
     ldisj_seq,
     run,
+    shallow_ground_order_key,
     succeed,
 )
 
@@ -248,11 +249,28 @@ def test_ifa():
 
 def test_ground_order():
     x, y, z = var(), var(), var()
+
+    assert shallow_ground_order_key({}, x) > shallow_ground_order_key({}, (x, y))
+    assert shallow_ground_order_key({}, cons(x, y)) > shallow_ground_order_key(
+        {}, (x, y)
+    )
+    assert shallow_ground_order_key({}, cons(1, 2)) < shallow_ground_order_key(
+        {}, (1, 2, 3, 4, y)
+    )
+    assert shallow_ground_order_key({}, cons(1, 2)) == shallow_ground_order_key(
+        {}, (1, 2, 3, 4)
+    )
+    assert shallow_ground_order_key({}, (x, y)) == shallow_ground_order_key(
+        {}, (x, y, z)
+    )
+
     assert run(0, x, ground_order((y, [1, z], 1), x)) == ([1, [1, z], y],)
+
     a, b, c = var(), var(), var()
     assert run(0, (a, b, c), ground_order((y, [1, z], 1), (a, b, c))) == (
         (1, [1, z], y),
     )
+
     res = run(0, z, ground_order([cons(x, y), (x, y)], z))
     assert res == ([(x, y), cons(x, y)],)
     res = run(0, z, ground_order([(x, y), cons(x, y)], z))

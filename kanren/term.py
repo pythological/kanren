@@ -8,7 +8,7 @@ from etuples import rator as operator
 from unification.core import _reify, _unify, construction_sentinel, reify
 from unification.variable import isvar
 
-from .core import eq, lall
+from .core import eq, lall, shallow_ground_order_key
 from .goals import conso
 
 
@@ -104,3 +104,8 @@ def unify_term(u, v, s):
     if s is not False:
         s = yield _unify(u_args, v_args, s)
     yield s
+
+
+@shallow_ground_order_key.register(Mapping, TermType)
+def shallow_ground_order_key_TermType(S, x):
+    return shallow_ground_order_key(S, cons(operator(x), arguments(x)))

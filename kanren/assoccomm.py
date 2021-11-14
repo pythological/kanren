@@ -4,29 +4,6 @@ This module provides goals for associative and commutative unification.  It
 accomplishes this through naively trying all possibilities.  This was built to
 be used in the computer algebra systems SymPy and Theano.
 
->>> from kanren import run, var, fact
->>> from kanren.assoccomm import eq_assoccomm as eq
->>> from kanren.assoccomm import commutative, associative
-
->>> # Define some dummy Ops
->>> add = 'add'
->>> mul = 'mul'
-
->>> # Declare that these ops are commutative using the facts system
->>> fact(commutative, mul)
->>> fact(commutative, add)
->>> fact(associative, mul)
->>> fact(associative, add)
-
->>> # Define some wild variables
->>> x, y = var('x'), var('y')
-
->>> # Two expressions to match
->>> pattern = (mul, (add, 1, x), y)                # (1 + x) * y
->>> expr    = (mul, 2, (add, 3, 1))                # 2 * (3 + 1)
-
->>> print(run(0, (x,y), eq(pattern, expr)))
-((3, 2),)
 """
 from collections.abc import Sequence
 from functools import partial
@@ -176,6 +153,10 @@ def eq_assoc_args(
 def eq_assoc(u, v, n=None, op_predicate=associative, null_type=etuple):
     """Create a goal for associative unification of two terms.
 
+    Warning: This goal walks the left-hand argument, `u`, so make that argument
+    the most ground term; otherwise, it may iterate indefinitely when it should
+    actually terminate.
+
     >>> from kanren import run, var, fact
     >>> from kanren.assoccomm import eq_assoc as eq
 
@@ -195,6 +176,10 @@ def eq_assoc(u, v, n=None, op_predicate=associative, null_type=etuple):
 
 def eq_comm(u, v, op_predicate=commutative, null_type=etuple):
     """Create a goal for commutative equality.
+
+    Warning: This goal walks the left-hand argument, `u`, so make that argument
+    the most ground term; otherwise, it may iterate indefinitely when it should
+    actually terminate.
 
     >>> from kanren import run, var, fact
     >>> from kanren.assoccomm import eq_comm as eq
@@ -238,6 +223,10 @@ def assoc_flatten(a, a_flat):
 
 def eq_assoccomm(u, v, null_type=etuple):
     """Construct a goal for associative and commutative unification.
+
+    Warning: This goal walks the left-hand argument, `u`, so make that argument
+    the most ground term; otherwise, it may iterate indefinitely when it should
+    actually terminate.
 
     >>> from kanren.assoccomm import eq_assoccomm as eq
     >>> from kanren.assoccomm import commutative, associative

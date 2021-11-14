@@ -3,7 +3,7 @@ from functools import partial
 from etuples import etuple
 from unification import isvar, reify, var
 
-from .core import Zzz, conde, eq, fail, ground_order, lall, succeed
+from .core import Zzz, conde, eq, fail, lall, succeed
 from .goals import conso, nullo
 from .term import applyo
 
@@ -239,13 +239,11 @@ def term_walko(
     should always fail!
     """
 
-    def single_step(s, t):
-        u, v = var(), var()
+    def single_step(u, v):
         u_rator, u_rands = var(), var()
         v_rands = var()
 
         return lall(
-            ground_order((s, t), (u, v)),
             applyo(u_rator, u_rands, u),
             applyo(u_rator, v_rands, v),
             rator_goal(u_rator),
@@ -256,13 +254,11 @@ def term_walko(
             Zzz(rands_goal, u_rands, v_rands, u_rator, **kwargs),
         )
 
-    def term_walko_step(s, t):
+    def term_walko_step(u, v):
         nonlocal rator_goal, rands_goal, null_type
-        u, v = var(), var()
         z, w = var(), var()
 
         return lall(
-            ground_order((s, t), (u, v)),
             format_step(u, w) if format_step is not None else eq(u, w),
             conde(
                 [
