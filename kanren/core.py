@@ -250,22 +250,36 @@ def run(n, x, *goals, results_filter=None):
         return tuple(take(n, results))
 
 
-def dbgo(*args, msg=None):  # pragma: no cover
-    """Construct a goal that sets a debug trace and prints reified arguments."""
+def dbgo(*args, msg=None, pdb=False, print_asap=True, trace=True):  # pragma: no cover
+    """Construct a goal that prints reified arguments and, optionally, sets a debug trace."""
     from pprint import pprint
+    from unification import var
+
+    trace_var = var("__dbgo_trace")
 
     def dbgo_goal(S):
-        nonlocal args
-        args = reify(args, S)
+        nonlocal args, msg, pdb, print_asap, trace_var, trace
 
-        if msg is not None:
-            print(msg)
+        args_rf, trace_rf = reify((args, trace_var), S)
 
-        pprint(args)
+        if trace:
+            S = S.copy()
+            if isvar(trace_rf):
+                S[trace_var] = [(msg, tuple(str(a) for a in args_rf))]
+            else:
+                trace_rf.append((msg, tuple(str(a) for a in args_rf)))
+                S[trace_var] = trace_rf
 
-        import pdb
+        if print_asap:
+            if msg is not None:
+                print(msg)
+            pprint(args_rf)
 
-        pdb.set_trace()
+        if pdb:
+            import pdb
+
+            pdb.set_trace()
+
         yield S
 
     return dbgo_goal
