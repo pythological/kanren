@@ -40,6 +40,8 @@ make check
 
 Logic programming is a general programming paradigm.  This implementation however came about specifically to serve as an algorithmic core for Computer Algebra Systems in Python and for the automated generation and optimization of numeric software.  Domain specific languages, code generation, and compilers have recently been a hot topic in the Scientific Python community.  `kanren` aims to be a low-level core for these projects.
 
+These points&mdash;along with `kanren` examples&mdash;are covered in the paper ["miniKanren as a Tool for Symbolic Computation in Python"](https://arxiv.org/abs/2005.11644).
+
 ## Examples
 
 `kanren` enables one to express sophisticated relations&mdash;in the form of *goals*&mdash;and generate values that satisfy the relations.  The following code is the "Hello, world!" of logic programming; it asks for values of the *logic variable* `x` such that `x == 5`:
