@@ -8,75 +8,94 @@ from .goals import conso, nullo
 from .term import applyo
 
 
-def mapo(relation, a, b, null_type=list, null_res=True, first=True):
-    """Apply a relation to corresponding elements in two sequences and succeed if the relation succeeds for all pairs."""  # noqa: E501
+def mapo(*args, null_res=True, **kwargs):
+    """Apply a relation to corresponding elements in two sequences and succeed if the relation succeeds for all sets of elements.  # noqa: E501
 
-    b_car, b_cdr = var(), var()
-    a_car, a_cdr = var(), var()
-
-    return conde(
-        [nullo(a, b, default_ConsNull=null_type) if (not first or null_res) else fail],
-        [
-            conso(a_car, a_cdr, a),
-            conso(b_car, b_cdr, b),
-            Zzz(relation, a_car, b_car),
-            Zzz(mapo, relation, a_cdr, b_cdr, null_type=null_type, first=False),
-        ],
-    )
+    See `map_anyo` for parameter descriptions.
+    """
+    return map_anyo(*args, null_res=null_res, _first=True, _any_succeed=None, **kwargs)
 
 
 def map_anyo(
-    relation, a, b, null_type=list, null_res=False, first=True, any_succeed=False
+    relation,
+    *args,
+    null_type=list,
+    null_res=False,
+    _first=True,
+    _any_succeed=False,
+    **kwargs
 ):
-    """Apply a relation to corresponding elements in two sequences and succeed if at least one pair succeeds.
+    """Apply a relation to corresponding elements across sequences and succeed if at least one set of elements succeeds.
 
     Parameters
     ----------
+    relation: Callable
+       The goal to apply across elements (`car`s, specifically) of `args`.
+    *args: Sequence
+       Argument list containing terms that are walked and evaluated as
+       `relation(car(a_1), car(a_2), ...)`.
     null_type: optional
        An object that's a valid cdr for the collection type desired.  If
        `False` (i.e. the default value), the cdr will be inferred from the
        inputs, or defaults to an empty list.
+    null_res: bool
+       Succeed on empty lists.
+    _first: bool
+       Indicate whether or not this is the first iteration in a call to this
+       goal constructor (in contrast to a recursive call).
+       This is not a user-level parameter.
+    _any_succeed: bool or None
+       Indicate whether or not an iteration has succeeded in a recursive call
+       to this goal, or, if `None`, indicate that only the relation against the
+       `cars` should be checked (i.e. no "any" functionality).
+       This is not a user-level parameter.
+    **kwargs: dict
+       Keyword arguments to `relation`.
     """  # noqa: E501
 
-    b_car, b_cdr = var(), var()
-    a_car, a_cdr = var(), var()
+    cars = tuple(var() for a in args)
+    cdrs = tuple(var() for a in args)
+
+    conde_branches = [
+        [
+            Zzz(relation, *cars, **kwargs),
+            Zzz(
+                map_anyo,
+                relation,
+                *cdrs,
+                null_type=null_type,
+                null_res=null_res,
+                _first=False,
+                _any_succeed=True if _any_succeed is not None else None,
+                **kwargs
+            ),
+        ]
+    ]
+
+    if _any_succeed is not None:
+        nullo_condition = _any_succeed or (_first and null_res)
+        conde_branches.append(
+            [eq(a_car, b_car) for a_car, b_car in zip(cars, cars[1:])]
+            + [
+                Zzz(
+                    map_anyo,
+                    relation,
+                    *cdrs,
+                    null_type=null_type,
+                    null_res=null_res,
+                    _first=False,
+                    _any_succeed=_any_succeed,
+                    **kwargs
+                ),
+            ]
+        )
+    else:
+        nullo_condition = not _first or null_res
 
     return conde(
-        [
-            nullo(a, b, default_ConsNull=null_type)
-            if (any_succeed or (first and null_res))
-            else fail
-        ],
-        [
-            conso(a_car, a_cdr, a),
-            conso(b_car, b_cdr, b),
-            conde(
-                [
-                    Zzz(relation, a_car, b_car),
-                    Zzz(
-                        map_anyo,
-                        relation,
-                        a_cdr,
-                        b_cdr,
-                        null_type=null_type,
-                        any_succeed=True,
-                        first=False,
-                    ),
-                ],
-                [
-                    eq(a_car, b_car),
-                    Zzz(
-                        map_anyo,
-                        relation,
-                        a_cdr,
-                        b_cdr,
-                        null_type=null_type,
-                        any_succeed=any_succeed,
-                        first=False,
-                    ),
-                ],
-            ),
-        ],
+        [nullo(*args, default_ConsNull=null_type) if nullo_condition else fail],
+        [conso(car, cdr, arg) for car, cdr, arg in zip(cars, cdrs, args)]
+        + [conde(*conde_branches)],
     )
 
 
