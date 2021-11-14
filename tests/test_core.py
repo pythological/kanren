@@ -10,6 +10,7 @@ from kanren.core import (
     eq,
     fail,
     ground_order,
+    ground_order_seqs,
     ifa,
     lall,
     lany,
@@ -275,3 +276,25 @@ def test_ground_order():
     assert res == ([(x, y), cons(x, y)],)
     res = run(0, z, ground_order([(x, y), cons(x, y)], z))
     assert res == ([(x, y), cons(x, y)],)
+
+
+def test_ground_order_seq():
+
+    x, y, z = var(), var(), var()
+    a, b = var(), var()
+    res = run(0, (x, y), ground_order_seqs([a, (b, 2)], [x, y]))
+    assert res == ((a, (b, 2)),)
+    res = run(0, (x, y), ground_order_seqs([(a,), (b, 2)], [x, y]))
+    assert res == (((a,), (b, 2)),)
+    res = run(0, (x, y), ground_order_seqs([(a, b), (b, 2)], [x, y]))
+    assert res == (((b, a), (2, b)),)
+    res = run(0, (x, y), ground_order_seqs([(b, 2), (a, b)], [x, y]))
+    assert res == (((2, b), (b, a)),)
+    res = run(0, (x, y, z), ground_order_seqs([(b, 2), (a, b), (0, 1)], [x, y, z]))
+    assert res == (((2, b), (b, a), (1, 0)),)
+    res = run(0, (x, y), ground_order_seqs([(), ()], [x, y]))
+    assert res == (((), ()),)
+    res = run(0, (x, y), ground_order_seqs([(a, (1, b)), (b, 2)], [x, y]))
+    assert res == ((((1, b), a), (2, b)),)
+    res = run(0, (x, y), ground_order_seqs(["abc", "def"], [x, y]))
+    assert res == (("abc", "def"),)
