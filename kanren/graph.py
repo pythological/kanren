@@ -3,13 +3,13 @@ from functools import partial
 from etuples import etuple
 from unification import isvar, reify, var
 
-from .core import Zzz, conde, eq, fail, lall, succeed
+from .core import Zzz, conde, eq, fail, ground_order_seqs, lall, succeed
 from .goals import conso, nullo
 from .term import applyo
 
 
 def mapo(*args, null_res=True, **kwargs):
-    """Apply a relation to corresponding elements in two sequences and succeed if the relation succeeds for all sets of elements.  # noqa: E501
+    """Apply a goal to corresponding elements in two sequences and succeed if the goal succeeds for all sets of elements.  # noqa: E501
 
     See `map_anyo` for parameter descriptions.
     """
@@ -17,40 +17,43 @@ def mapo(*args, null_res=True, **kwargs):
 
 
 def map_anyo(
-    relation,
+    goal,
     *args,
     null_type=list,
     null_res=False,
+    use_ground_ordering=True,
     _first=True,
     _any_succeed=False,
-    **kwargs
+    **kwargs,
 ):
-    """Apply a relation to corresponding elements across sequences and succeed if at least one set of elements succeeds.
+    """Apply a goal to corresponding elements across sequences and succeed if at least one set of elements succeeds.
 
     Parameters
     ----------
-    relation: Callable
+    goal: Callable
        The goal to apply across elements (`car`s, specifically) of `args`.
     *args: Sequence
        Argument list containing terms that are walked and evaluated as
-       `relation(car(a_1), car(a_2), ...)`.
+       `goal(car(a_1), car(a_2), ...)`.
     null_type: optional
        An object that's a valid cdr for the collection type desired.  If
        `False` (i.e. the default value), the cdr will be inferred from the
        inputs, or defaults to an empty list.
     null_res: bool
        Succeed on empty lists.
+    use_ground_ordering: bool
+        Order arguments by their "groundedness" before recursing.
     _first: bool
        Indicate whether or not this is the first iteration in a call to this
        goal constructor (in contrast to a recursive call).
        This is not a user-level parameter.
     _any_succeed: bool or None
        Indicate whether or not an iteration has succeeded in a recursive call
-       to this goal, or, if `None`, indicate that only the relation against the
+       to this goal, or, if `None`, indicate that only the goal against the
        `cars` should be checked (i.e. no "any" functionality).
        This is not a user-level parameter.
     **kwargs: dict
-       Keyword arguments to `relation`.
+       Keyword arguments to `goal`.
     """  # noqa: E501
 
     cars = tuple(var() for a in args)
@@ -58,16 +61,16 @@ def map_anyo(
 
     conde_branches = [
         [
-            Zzz(relation, *cars, **kwargs),
+            Zzz(goal, *cars, **kwargs),
             Zzz(
                 map_anyo,
-                relation,
+                goal,
                 *cdrs,
                 null_type=null_type,
                 null_res=null_res,
                 _first=False,
                 _any_succeed=True if _any_succeed is not None else None,
-                **kwargs
+                **kwargs,
             ),
         ]
     ]
@@ -79,22 +82,30 @@ def map_anyo(
             + [
                 Zzz(
                     map_anyo,
-                    relation,
+                    goal,
                     *cdrs,
                     null_type=null_type,
                     null_res=null_res,
                     _first=False,
                     _any_succeed=_any_succeed,
-                    **kwargs
+                    **kwargs,
                 ),
             ]
         )
     else:
         nullo_condition = not _first or null_res
 
+    if use_ground_ordering:
+        args_ord = tuple(var() for t in args)
+        ground_order_goal = ground_order_seqs(args, args_ord)
+    else:
+        args_ord = args
+        ground_order_goal = succeed
+
     return conde(
         [nullo(*args, default_ConsNull=null_type) if nullo_condition else fail],
-        [conso(car, cdr, arg) for car, cdr, arg in zip(cars, cdrs, args)]
+        [ground_order_goal]
+        + [conso(car, cdr, arg) for car, cdr, arg in zip(cars, cdrs, args_ord)]
         + [conde(*conde_branches)],
     )
 
@@ -109,15 +120,19 @@ def eq_length(u, v, default_ConsNull=list):
     return mapo(vararg_success, u, v, null_type=default_ConsNull)
 
 
-def reduceo(relation, in_term, out_term, *args, **kwargs):
-    """Relate a term and the fixed-point of that term under a given relation.
+def reduceo(goal, in_term, out_term, *args, **kwargs):
+    """Construct a goal that yields the fixed-point of another goal.
 
-    This includes the "identity" relation.
+    It simply tries to order the implicit `conde` recursion branches so that they
+    produce the fixed-point value first.  All goals that follow are the reductions
+    leading up to the fixed-point.
+
+    FYI: The results will include `eq(in_term, out_term)`.
     """
 
     def reduceo_goal(s):
 
-        nonlocal in_term, out_term, relation, args, kwargs
+        nonlocal in_term, out_term, goal, args, kwargs
 
         in_term_rf, out_term_rf = reify((in_term, out_term), s)
 
@@ -125,19 +140,19 @@ def reduceo(relation, in_term, out_term, *args, **kwargs):
         term_rdcd = var()
 
         # Are we working "backward" and (potentially) "expanding" a graph
-        # (e.g. when the relation is a reduction rule)?
+        # (e.g. when the goal is a reduction rule)?
         is_expanding = isvar(in_term_rf)
 
-        # One application of the relation assigned to `term_rdcd`
-        single_apply_g = relation(in_term_rf, term_rdcd, *args, **kwargs)
+        # One application of the goal assigned to `term_rdcd`
+        single_apply_g = goal(in_term_rf, term_rdcd, *args, **kwargs)
 
         # Assign/equate (unify, really) the result of a single application to
         # the "output" term.
         single_res_g = eq(term_rdcd, out_term_rf)
 
-        # Recurse into applications of the relation (well, produce a goal that
+        # Recurse into applications of the goal (well, produce a goal that
         # will do that)
-        another_apply_g = reduceo(relation, term_rdcd, out_term_rf, *args, **kwargs)
+        another_apply_g = reduceo(goal, term_rdcd, out_term_rf, *args, **kwargs)
 
         # We want the fixed-point value to show up in the stream output
         # *first*, but that requires some checks.
@@ -166,55 +181,51 @@ def reduceo(relation, in_term, out_term, *args, **kwargs):
 
 def walko(
     goal,
-    graph_in,
-    graph_out,
-    rator_goal=None,
+    *terms,
+    pre_process_fn=None,
     null_type=etuple,
     map_rel=partial(map_anyo, null_res=True),
 ):
-    """Apply a binary relation between all nodes in two graphs.
-
-    When `rator_goal` is used, the graphs are treated as term graphs, and the
-    multi-functions `rator`, `rands`, and `apply` are used to walk the graphs.
-    Otherwise, the graphs must be iterable according to `map_anyo`.
+    """Apply a goal between all nodes in a set of terms.
 
     Parameters
     ----------
     goal: callable
-        A goal that is applied to all terms in the graph.
-    graph_in: object
-        The graph for which the left-hand side of a binary relation holds.
-    graph_out: object
-        The graph for which the right-hand side of a binary relation holds.
-    rator_goal: callable (default None)
-        A goal that is applied to the rators of a graph.  When specified,
-        `goal` is only applied to rands and it must succeed along with the
-        rator goal in order to descend into sub-terms.
+        A goal that is applied to all terms and their sub-terms.
+    *terms: Sequence of objects
+        The terms to be walked.
+    pre_process_fn: callable (default None)
+        A goal with a signature of the form `(old_terms, new_terms)`, where
+        each argument is a list of corresponding terms.
+        This goal can be used to transform terms before walking them.
     null_type: type
-        The collection type used when it is not fully determined by the graph
+        The collection type used when it is not fully determined by the `terms`
         arguments.
     map_rel: callable
-        The map relation used to apply `goal` to a sub-graph.
+        The map goal used to apply `goal` to corresponding sub-terms.
     """
 
-    rator_in, rands_in, rator_out, rands_out = var(), var(), var(), var()
+    if pre_process_fn is not None:
+        terms_pp = tuple(var() for t in terms)
+        pre_process_goal = pre_process_fn(*(terms + terms_pp))
+    else:
+        terms_pp = terms
+        pre_process_goal = succeed
 
     _walko = partial(
-        walko, goal, rator_goal=rator_goal, null_type=null_type, map_rel=map_rel
+        walko,
+        goal,
+        pre_process_fn=pre_process_fn,
+        null_type=null_type,
+        map_rel=map_rel,
     )
 
-    return conde(
-        [
-            Zzz(goal, graph_in, graph_out),
-        ],
-        [
-            applyo(rator_in, rands_in, graph_in),
-            applyo(rator_out, rands_out, graph_out),
-            Zzz(rator_goal, rator_in, rator_out),
-            Zzz(map_rel, _walko, rands_in, rands_out, null_type=null_type),
-        ]
-        if rator_goal is not None
-        else [Zzz(map_rel, _walko, graph_in, graph_out, null_type=null_type)],
+    return lall(
+        pre_process_goal,
+        conde(
+            [Zzz(goal, *terms_pp)],
+            [Zzz(map_rel, _walko, *terms_pp, null_type=null_type)],
+        ),
     )
 
 
@@ -226,7 +237,7 @@ def term_walko(
     null_type=etuple,
     no_ident=False,
     format_step=None,
-    **kwargs
+    **kwargs,
 ):
     """Construct a goal for walking a term graph.
 

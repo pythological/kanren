@@ -176,7 +176,11 @@ def ground_order_seqs(in_seqs, out_seqs, key_fn=shallow_ground_order_key):
         ):
 
             in_seqs_ord = zip(*sorted(zip(*in_seqs_rf), key=partial(key_fn, S)))
-            S_new = unify(list(out_seqs_rf), list(in_seqs_ord), S)
+            S_new = unify(
+                list(out_seqs_rf),
+                [type(j)(i) for i, j in zip(in_seqs_ord, in_seqs_rf)],
+                S,
+            )
 
             if S_new is not False:
                 yield S_new
@@ -251,8 +255,9 @@ def run(n, x, *goals, results_filter=None):
 
 
 def dbgo(*args, msg=None, pdb=False, print_asap=True, trace=True):  # pragma: no cover
-    """Construct a goal that prints reified arguments and, optionally, sets a debug trace."""
+    """Construct a goal that prints reified arguments and, optionally, sets a debug trace."""  # noqa: E501
     from pprint import pprint
+
     from unification import var
 
     trace_var = var("__dbgo_trace")

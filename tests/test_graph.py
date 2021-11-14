@@ -11,7 +11,9 @@ from unification import isvar, reify, unify, var
 
 from kanren import conde, eq, lall, run
 from kanren.constraints import isinstanceo
+from kanren.core import Zzz
 from kanren.graph import eq_length, map_anyo, mapo, reduceo, walko
+from kanren.term import applyo
 
 
 class OrderedFunction(object):
@@ -71,11 +73,23 @@ def single_math_reduceo(expanded_term, reduced_term):
 
 math_reduceo = partial(reduceo, single_math_reduceo)
 
+
+def walko_term_map_rel(walko_goal, x, y, **kwargs):
+    rator_in, rator_out = var(), var()
+    rands_in, rands_out = var(), var()
+
+    return lall(
+        applyo(rator_in, rands_in, x),
+        applyo(rator_out, rands_out, y),
+        eq(rator_in, rator_out),
+        Zzz(map_anyo, walko_goal, rands_in, rands_out, null_res=False, **kwargs),
+    )
+
+
 walko_term = partial(
     walko,
-    rator_goal=eq,
     null_type=ExpressionTuple,
-    map_rel=partial(map_anyo, null_res=False),
+    map_rel=walko_term_map_rel,
 )
 
 
@@ -176,7 +190,7 @@ def test_map_anyo_types():
 
 
 def test_map_anyo_misc():
-    q_lv = var("q")
+    q_lv = var()
 
     res = run(0, q_lv, map_anyo(eq, [1, 2, 3], [1, 2, 3]))
     # TODO: Remove duplicate results
@@ -201,13 +215,14 @@ def test_map_anyo_misc():
     test_res = run(4, q_lv, map_anyo(math_reduceo, [1, etuple(add, 2, 2)], q_lv))
     assert test_res == ([1, etuple(mul, 2, 2)],)
 
-    test_res = run(4, q_lv, map_anyo(math_reduceo, q_lv, var("z")))
+    z = var()
+    test_res = run(4, q_lv, map_anyo(math_reduceo, q_lv, z))
     assert all(isinstance(r, list) for r in test_res)
 
-    test_res = run(4, q_lv, map_anyo(math_reduceo, q_lv, var("z"), tuple))
+    test_res = run(4, q_lv, map_anyo(math_reduceo, q_lv, z, null_type=tuple))
     assert all(isinstance(r, tuple) for r in test_res)
 
-    x, y, z = var(), var(), var()
+    x, y = var(), var()
 
     def test_bin(a, b):
         return conde([eq(a, 1), eq(b, 2)])
@@ -230,6 +245,21 @@ def test_map_anyo_misc():
         s = unify(a, b)
         assert s is not False
         assert all(isvar(i) for i in reify((x, y, z), s))
+
+    # With ground ordering, this function should only be called once
+    n = 0
+
+    def eq_count(x, y):
+        nonlocal n
+        n += 1
+        return eq(x, y)
+
+    run(0, q_lv, map_anyo(eq_count, [x, y, 3], [y, x, 2]))
+    assert n == 1
+
+    n = 0
+    run(0, q_lv, map_anyo(eq_count, [x, y, 3], [y, x, 2], use_ground_ordering=False))
+    assert n == 3
 
 
 @pytest.mark.parametrize(
@@ -323,7 +353,7 @@ def test_map_anyo_reverse():
 
 
 def test_walko_misc():
-    q_lv = var(prefix="q")
+    q_lv = var()
 
     expr = etuple(add, etuple(mul, 2, 1), etuple(add, 1, 1))
     res = run(0, q_lv, walko(eq, expr, expr))
@@ -353,6 +383,18 @@ def test_walko_misc():
         etuple(),
     )
 
+    def map_rel(walk_g, x, y, **kwargs):
+        rator_in, rator_out = var(), var()
+        rands_in, rands_out = var(), var()
+
+        return lall(
+            applyo(rator_in, rands_in, x),
+            applyo(rator_out, rands_out, y),
+            eq(rator_in, add),
+            eq(rator_out, add),
+            map_anyo(walk_g, x, y, **kwargs),
+        )
+
     res = run(
         1,
         q_lv,
@@ -366,7 +408,7 @@ def test_walko_misc():
             ),
             q_lv,
             # Only descend into `add` terms
-            rator_goal=lambda x, y: lall(eq(x, add), eq(y, add)),
+            map_rel=map_rel,
         ),
     )
 
@@ -374,6 +416,53 @@ def test_walko_misc():
         etuple(
             add, 3, etuple(mul, etuple(add, 1, 2), 1), etuple(add, etuple(add, 3, 2), 2)
         ),
+    )
+
+    # Now, we check that the `use_ground_order_seqs` option prevents infinite
+    # loops in `walko`.
+
+    # This would go on forever between the two variable terms, even though
+    # the `(2, 3)` pair would cause it fail (if it were ever reached)
+    # run(1, True, walko(eq, [var(), 2], [var(), 3]))
+    run(1, True, walko(eq, [var(), 2], [var(), 3]))
+
+    # Only walk rators for terms with the same car
+    def same_op(x, y, a, b):
+        rator_in = var()
+        rands_in, rands_out = var(), var()
+
+        return conde(
+            [
+                applyo(rator_in, rands_in, x),
+                applyo(rator_in, rands_out, y),
+                eq(a, rands_in),
+                eq(b, rands_out),
+            ],
+            [eq(a, None), eq(b, None)],
+        )
+
+    def one_to_threeo(x, y):
+        return conde([eq(x, 1), eq(y, 3)], [eq(x, None), eq(y, None)])
+
+    # This won't work without the pre-processing function, because
+    # `one_to_threeo` will fail when given `add, add` arguments
+    assert (
+        run(0, True, walko(one_to_threeo, [add, 1, 1], [add, 3, 3], map_rel=mapo)) == ()
+    )
+
+    assert (
+        run(
+            1,
+            True,
+            walko(
+                one_to_threeo,
+                [add, 1, 1],
+                [add, 3, 3],
+                pre_process_fn=same_op,
+                map_rel=mapo,
+            ),
+        )
+        == (True,)
     )
 
 
