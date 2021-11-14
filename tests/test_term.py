@@ -1,68 +1,11 @@
 from cons import cons
+from cons.core import ConsType
 from etuples import etuple
 from unification import reify, unify, var
 
-from kanren.core import run
-from kanren.term import applyo, arguments, operator, term, unifiable_with_term
-
-
-@unifiable_with_term
-class Node(object):
-    def __init__(self, op, args):
-        self.op = op
-        self.args = args
-
-    def __eq__(self, other):
-        return (
-            type(self) == type(other)
-            and self.op == other.op
-            and self.args == other.args
-        )
-
-    def __hash__(self):
-        return hash((type(self), self.op, self.args))
-
-    def __str__(self):
-        return "%s(%s)" % (self.op.name, ", ".join(map(str, self.args)))
-
-    __repr__ = __str__
-
-
-class Operator(object):
-    def __init__(self, name):
-        self.name = name
-
-
-Add = Operator("add")
-Mul = Operator("mul")
-
-
-def add(*args):
-    return Node(Add, args)
-
-
-def mul(*args):
-    return Node(Mul, args)
-
-
-class Op(object):
-    def __init__(self, name):
-        self.name = name
-
-
-@arguments.register(Node)
-def arguments_Node(t):
-    return t.args
-
-
-@operator.register(Node)
-def operator_Node(t):
-    return t.op
-
-
-@term.register(Operator, (list, tuple))
-def term_Op(op, args):
-    return Node(op, args)
+from kanren.core import run, shallow_ground_order_key
+from kanren.term import TermType, applyo, arguments, operator, term
+from tests.utils import Add, Node, Operator
 
 
 def test_applyo():
@@ -103,21 +46,59 @@ def test_applyo():
 
 def test_applyo_object():
     x = var()
-    assert run(0, x, applyo(Add, (1, 2, 3), x)) == (add(1, 2, 3),)
-    assert run(0, x, applyo(x, (1, 2, 3), add(1, 2, 3))) == (Add,)
-    assert run(0, x, applyo(Add, x, add(1, 2, 3))) == ((1, 2, 3),)
+    assert run(0, x, applyo(Add, (1, 2, 3), x)) == (Add(1, 2, 3),)
+    assert run(0, x, applyo(x, (1, 2, 3), Add(1, 2, 3))) == (Add,)
+    assert run(0, x, applyo(Add, x, Add(1, 2, 3))) == ((1, 2, 3),)
+
+
+def test_term_dispatch():
+
+    t = Node(Add, (1, 2))
+
+    assert arguments(t) == (1, 2)
+    assert operator(t) == Add
+    assert term(operator(t), arguments(t)) == t
 
 
 def test_unifiable_with_term():
-    add = Operator("add")
-    t = Node(add, (1, 2))
+    from kanren.term import unifiable_with_term
 
-    assert arguments(t) == (1, 2)
-    assert operator(t) == add
-    assert term(operator(t), arguments(t)) == t
+    @unifiable_with_term
+    class NewNode(Node):
+        pass
+
+    class NewOperator(Operator):
+        def __call__(self, *args):
+            return NewNode(self, args)
+
+    NewAdd = NewOperator("newadd")
 
     x = var()
-    s = unify(Node(add, (1, x)), Node(add, (1, 2)), {})
+    s = unify(NewNode(NewAdd, (1, x)), NewNode(NewAdd, (1, 2)), {})
 
     assert s == {x: 2}
-    assert reify(Node(add, (1, x)), s) == Node(add, (1, 2))
+    assert reify(NewNode(NewAdd, (1, x)), s) == NewNode(NewAdd, (1, 2))
+
+
+def test_TermType():
+    assert issubclass(type(Add(1, 2)), TermType)
+    assert isinstance(Add(1, 2), TermType)
+    # assert not issubclass(type([1, 2]), TermType)
+    # assert not isinstance([1, 2], TermType)
+    assert issubclass(type([1, 2]), TermType)
+    assert isinstance([1, 2], TermType)
+    assert not isinstance(ConsType, TermType)
+    assert not issubclass(type(ConsType), TermType)
+
+
+def test_shallow_ground_order():
+
+    x, y, z = var(), var(), var()
+
+    assert shallow_ground_order_key({}, x) > shallow_ground_order_key({}, Add(x, y))
+    assert shallow_ground_order_key({}, cons(x, y)) > shallow_ground_order_key(
+        {}, Add(x, y)
+    )
+    assert shallow_ground_order_key({}, Add(x, y)) == shallow_ground_order_key(
+        {}, Add(x, y, z)
+    )

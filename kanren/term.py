@@ -1,14 +1,44 @@
-from collections.abc import Mapping, Sequence
+from abc import ABCMeta
+from collections.abc import Callable, Mapping
+from operator import length_hint
 
-from cons.core import ConsError, cons
+from cons.core import ConsError, ProperSequence, cons
+from etuples import apply
 from etuples import apply as term
 from etuples import rands as arguments
 from etuples import rator as operator
+from multipledispatch import dispatch
 from unification.core import _reify, _unify, construction_sentinel, reify
 from unification.variable import isvar
 
-from .core import eq, lall
+from .core import eq, lall, shallow_ground_order_key
 from .goals import conso
+
+
+class TermMetaType(ABCMeta):
+    """A meta type that can be used to check for `operator`/`arguments` support."""
+
+    def __instancecheck__(self, o):
+        o_type = type(o)
+        if (
+            isinstance(o, ProperSequence)
+            or any(
+                issubclass(o_type, k) for k in operator.funcs.keys() if k[0] != object
+            )
+        ) and length_hint(o, 1) > 0:
+            return True
+        return False
+
+    def __subclasscheck__(self, o_type):
+        if issubclass(o_type, ProperSequence) or any(
+            issubclass(o_type, k) for k in operator.funcs.keys() if k[0] != object
+        ):
+            return True
+        return False
+
+
+class TermType(metaclass=TermMetaType):
+    pass
 
 
 def applyo(o_rator, o_rands, obj):
@@ -55,12 +85,17 @@ def applyo(o_rator, o_rands, obj):
     return applyo_goal
 
 
-@term.register(object, Sequence)
-def term_Sequence(rator, rands):
+@dispatch(object, ProperSequence)
+def term(rator, rands):
     # Overwrite the default `apply` dispatch function and make it preserve
     # types
     res = cons(rator, rands)
     return res
+
+
+@term.register(Callable, ProperSequence)
+def term_ExpressionTuple(rator, rands):
+    return apply(rator, rands)
 
 
 def unifiable_with_term(cls):
@@ -84,3 +119,13 @@ def unify_term(u, v, s):
     if s is not False:
         s = yield _unify(u_args, v_args, s)
     yield s
+
+
+@shallow_ground_order_key.register(Mapping, TermType)
+def shallow_ground_order_key_TermType(S, x):
+    if length_hint(x, 1) > 0:
+        return shallow_ground_order_key.dispatch(type(S), object)(
+            S, cons(operator(x), arguments(x))
+        )
+    else:
+        return shallow_ground_order_key.dispatch(type(S), object)(S, x)
