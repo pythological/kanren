@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from copy import copy
 
 import pytest
 from cons import cons
@@ -19,6 +20,21 @@ from kanren.assoccomm import (
 from kanren.core import run
 from kanren.facts import fact
 from kanren.term import arguments, operator, term
+
+
+@pytest.fixture(autouse=True)
+def clear_assoccomm():
+    old_commutative_index = copy(commutative.index)
+    old_commutative_facts = copy(commutative.facts)
+    old_associative_index = copy(associative.index)
+    old_associative_facts = copy(associative.facts)
+    try:
+        yield
+    finally:
+        commutative.index = old_commutative_index
+        commutative.facts = old_commutative_facts
+        associative.index = old_associative_index
+        associative.facts = old_associative_facts
 
 
 class Node(object):
@@ -82,9 +98,6 @@ def results(g, s=None):
 
 def test_eq_comm():
     x, y, z = var(), var(), var()
-
-    commutative.facts.clear()
-    commutative.index.clear()
 
     comm_op = "comm_op"
 
@@ -326,9 +339,6 @@ def test_eq_assoc():
 
     assoc_op = "assoc_op"
 
-    associative.index.clear()
-    associative.facts.clear()
-
     fact(associative, assoc_op)
 
     assert run(0, True, eq_assoc(1, 1)) == (True,)
@@ -449,9 +459,6 @@ def test_eq_assoccomm():
 
     ac = "commassoc_op"
 
-    commutative.index.clear()
-    commutative.facts.clear()
-
     fact(commutative, ac)
     fact(associative, ac)
 
@@ -545,11 +552,6 @@ def test_assoccomm_algebra():
     add = "add"
     mul = "mul"
 
-    commutative.index.clear()
-    commutative.facts.clear()
-    associative.index.clear()
-    associative.facts.clear()
-
     fact(commutative, add)
     fact(associative, add)
     fact(commutative, mul)
@@ -564,11 +566,6 @@ def test_assoccomm_algebra():
 
 
 def test_assoccomm_objects():
-
-    commutative.index.clear()
-    commutative.facts.clear()
-    associative.index.clear()
-    associative.facts.clear()
 
     fact(commutative, Add)
     fact(associative, Add)
