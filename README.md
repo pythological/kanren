@@ -1,6 +1,6 @@
 # `kanren`
 
-[![Build Status](https://travis-ci.org/pythological/kanren.svg?branch=master)](https://travis-ci.org/pythological/kanren) [![Coverage Status](https://coveralls.io/repos/github/pythological/kanren/badge.svg?branch=master)](https://coveralls.io/github/pythological/kanren?branch=master) [![PyPI](https://img.shields.io/pypi/v/miniKanren)](https://pypi.org/project/miniKanren/)
+[![Build Status](https://travis-ci.org/pythological/kanren.svg?branch=master)](https://travis-ci.org/pythological/kanren) [![Coverage Status](https://coveralls.io/repos/github/pythological/kanren/badge.svg?branch=master)](https://coveralls.io/github/pythological/kanren?branch=master) [![PyPI](https://img.shields.io/pypi/v/miniKanren)](https://pypi.org/project/miniKanren/) [![Join the chat at https://gitter.im/pythological/kanren](https://badges.gitter.im/pythological/kanren.svg)](https://gitter.im/pythological/kanren?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 Logic/relational programming in Python with [miniKanren](http://minikanren.org/).
 
