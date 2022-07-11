@@ -3,10 +3,10 @@ name: Tests
 on:
   push:
     branches:
-      - master
+      - main
   pull_request:
     branches:
-      - master
+      - main
 
 # Cancels all previous workflow runs for pull requests that have not completed.
 concurrency:
