@@ -2,16 +2,17 @@
 Zebra puzzle as published in Life International in 1962.
 https://en.wikipedia.org/wiki/Zebra_Puzzle
 """
-from typing import Union
 from dataclasses import dataclass, field
+from typing import Union
 
-from kanren import eq, conde, lall, membero, run
-from unification import unifiable, var, vars, Var
+from unification import Var, unifiable, var, vars
+
+from kanren import conde, eq, lall, membero, run
 
 
 @unifiable
 @dataclass
-class House():
+class House:
     nationality: Union[str, Var] = field(default_factory=var)
     drink: Union[str, Var] = field(default_factory=var)
     animal: Union[str, Var] = field(default_factory=var)
@@ -23,6 +24,7 @@ def righto(right, left, houses):
     """Express that `right` is on the right of `left` among all the houses."""
     neighbors = tuple(zip(houses[:-1], houses[1:]))
     return membero((left, right), neighbors)
+
 
 def nexto(a, b, houses):
     """Express that `a` and `b` are next to each other."""
@@ -53,8 +55,42 @@ goals = lall(
 
 results = run(0, houses, goals)
 print(results)
-# ([House(nationality='Norwegian', drink='water', animal='fox', cigarettes='Kools', color='yellow'),
-#   House(nationality='Ukrainian', drink='tea', animal='horse', cigarettes='Chesterfields', color='blue'),
-#   House(nationality='Englishman', drink='milk', animal='snails', cigarettes='Old Gold', color='red'),
-#   House(nationality='Spaniard', drink='orange juice', animal='dog', cigarettes='Lucky Strike', color='ivory'),
-#   House(nationality='Japanese', drink='coffee', animal='zebra', cigarettes='Parliaments', color='green')],)
+# (
+#     [
+#         House(
+#             nationality="Norwegian",
+#             drink="water",
+#             animal="fox",
+#             cigarettes="Kools",
+#             color="yellow",
+#         ),
+#         House(
+#             nationality="Ukrainian",
+#             drink="tea",
+#             animal="horse",
+#             cigarettes="Chesterfields",
+#             color="blue",
+#         ),
+#         House(
+#             nationality="Englishman",
+#             drink="milk",
+#             animal="snails",
+#             cigarettes="Old Gold",
+#             color="red",
+#         ),
+#         House(
+#             nationality="Spaniard",
+#             drink="orange juice",
+#             animal="dog",
+#             cigarettes="Lucky Strike",
+#             color="ivory",
+#         ),
+#         House(
+#             nationality="Japanese",
+#             drink="coffee",
+#             animal="zebra",
+#             cigarettes="Parliaments",
+#             color="green",
+#         ),
+#     ],
+# )

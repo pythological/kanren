@@ -235,15 +235,12 @@ def test_ifa():
         == ()
     )
 
-    assert (
-        run(
-            0,
-            y,
-            eq(x, True),
-            ifa(lall(eq(x, True), eq(y, 1)), lall(eq(x, True), eq(y, 2))),
-        )
-        == (1,)
-    )
+    assert run(
+        0,
+        y,
+        eq(x, True),
+        ifa(lall(eq(x, True), eq(y, 1)), lall(eq(x, True), eq(y, 2))),
+    ) == (1,)
 
 
 def test_ground_order():

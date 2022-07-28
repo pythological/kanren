@@ -5,6 +5,7 @@ from setuptools import setup
 
 import versioneer
 
+
 setup(
     name="miniKanren",
     version=versioneer.get_version(),
@@ -21,7 +22,11 @@ setup(
         "multipledispatch",
         "etuples >= 0.3.1",
         "logical-unification >= 0.4.1",
+        "typing_extensions",
     ],
+    package_data={
+        "kanren": ["py.typed"],
+    },
     tests_require=["pytest", "sympy"],
     long_description=open("README.md").read() if exists("README.md") else "",
     long_description_content_type="text/markdown",

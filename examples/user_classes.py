@@ -5,6 +5,7 @@ from kanren import eq, membero, run, unifiable, var
 from kanren.core import lall
 from kanren.term import applyo, term  # noqa: F401
 
+
 unifiable(Account)  # Register Account class
 
 accounts = (
