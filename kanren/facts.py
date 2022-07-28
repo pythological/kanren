@@ -73,9 +73,10 @@ class Relation(object):
         return goal
 
     def __str__(self):
-        return "Rel: " + self.name
+        return f"Rel: {self.name}"
 
-    __repr__ = __str__
+    def __repr__(self):
+        return f"{type(self).__name__}({self.name}, {self.index}, {self.facts})"
 
 
 def fact(rel, *args):
