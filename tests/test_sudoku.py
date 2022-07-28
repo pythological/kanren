@@ -9,6 +9,7 @@ from kanren import run
 from kanren.core import lall
 from kanren.goals import permuteq
 
+
 DIGITS = tuple(range(1, 10))
 
 

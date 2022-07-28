@@ -2,6 +2,7 @@ from kanren import fact, run, var
 from kanren.assoccomm import associative, commutative
 from kanren.assoccomm import eq_assoccomm as eq
 
+
 # Define some dummy Operationss
 add = "add"
 mul = "mul"

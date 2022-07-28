@@ -1,35 +1,45 @@
+exclude: |
+    (?x)^(
+        versioneer\.py|
+        kanren/_version\.py|
+        doc/.*|
+        bin/.*
+    )$
 repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v2.1.0
+    hooks:
+      - id: debug-statements
+        exclude: |
+          (?x)^(
+              kanren/core\.py|
+          )$
+      - id: check-merge-conflict
   - repo: https://github.com/psf/black
-    rev: 20.8b1
+    rev: 22.3.0
     hooks:
       - id: black
         language_version: python3
-        exclude: |
-            (?x)^(
-                versioneer\.py|
-                kanren/_version\.py|
-                doc/.*|
-                bin/.*
-            )$
   - repo: https://gitlab.com/pycqa/flake8
     rev: 3.8.4
     hooks:
       - id: flake8
-        exclude: |
-            (?x)^(
-                versioneer\.py|
-                kanren/_version\.py|
-                doc/.*|
-                bin/.*
-            )$
   - repo: https://github.com/pycqa/isort
-    rev: 5.5.2
+    rev: 5.6.4
     hooks:
       - id: isort
+  - repo: https://github.com/humitos/mirrors-autoflake.git
+    rev: v1.1
+    hooks:
+      - id: autoflake
         exclude: |
-            (?x)^(
-                versioneer\.py|
-                kanren/_version\.py|
-                doc/.*|
-                bin/.*
-            )$
+          (?x)^(
+              .*/?__init__\.py|
+          )$
+        args: ['--in-place', '--remove-all-unused-imports', '--remove-unused-variable']
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v0.931
+    hooks:
+      - id: mypy
+        additional_dependencies:
+        - types-setuptools

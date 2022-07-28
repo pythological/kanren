@@ -2,6 +2,7 @@ from collections import namedtuple
 from collections.abc import Hashable, Iterable, Mapping, MutableSet, Set
 from itertools import chain
 
+
 HashableForm = namedtuple("HashableForm", ["type", "data"])
 
 
@@ -66,18 +67,6 @@ class FlexibleSet(MutableSet):
         raise NotImplementedError()
 
     def __ge__(self, other):
-        raise NotImplementedError()
-
-    def __ior__(self, item):
-        raise NotImplementedError()
-
-    def __iand__(self, item):
-        raise NotImplementedError()
-
-    def __ixor__(self, item):
-        raise NotImplementedError()
-
-    def __isub__(self, item):
         raise NotImplementedError()
 
     def __iter__(self):

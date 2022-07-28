@@ -320,19 +320,16 @@ def test_eq_assoc_args():
         == ()
     )
 
-    assert (
-        run(
-            0,
-            True,
-            eq_assoc_args(
-                assoc_op,
-                (1, (assoc_op, 2, 3)),
-                ((assoc_op, 1, 2), 3),
-                no_ident=True,
-            ),
-        )
-        == (True,)
-    )
+    assert run(
+        0,
+        True,
+        eq_assoc_args(
+            assoc_op,
+            (1, (assoc_op, 2, 3)),
+            ((assoc_op, 1, 2), 3),
+            no_ident=True,
+        ),
+    ) == (True,)
 
 
 def test_eq_assoc():
@@ -417,37 +414,26 @@ def test_assoc_flatten():
     fact(commutative, mul)
     fact(associative, mul)
 
-    assert (
-        run(
-            0,
-            True,
-            assoc_flatten(
-                (mul, 1, (add, 2, 3), (mul, 4, 5)), (mul, 1, (add, 2, 3), 4, 5)
-            ),
-        )
-        == (True,)
-    )
+    assert run(
+        0,
+        True,
+        assoc_flatten((mul, 1, (add, 2, 3), (mul, 4, 5)), (mul, 1, (add, 2, 3), 4, 5)),
+    ) == (True,)
 
     x = var()
-    assert (
-        run(
-            0,
-            x,
-            assoc_flatten((mul, 1, (add, 2, 3), (mul, 4, 5)), x),
-        )
-        == ((mul, 1, (add, 2, 3), 4, 5),)
-    )
+    assert run(
+        0,
+        x,
+        assoc_flatten((mul, 1, (add, 2, 3), (mul, 4, 5)), x),
+    ) == ((mul, 1, (add, 2, 3), 4, 5),)
 
-    assert (
-        run(
-            0,
-            True,
-            assoc_flatten(
-                ("op", 1, (add, 2, 3), (mul, 4, 5)), ("op", 1, (add, 2, 3), (mul, 4, 5))
-            ),
-        )
-        == (True,)
-    )
+    assert run(
+        0,
+        True,
+        assoc_flatten(
+            ("op", 1, (add, 2, 3), (mul, 4, 5)), ("op", 1, (add, 2, 3), (mul, 4, 5))
+        ),
+    ) == (True,)
 
     assert run(0, x, assoc_flatten(("op", 1, (add, 2, 3), (mul, 4, 5)), x)) == (
         ("op", 1, (add, 2, 3), (mul, 4, 5)),

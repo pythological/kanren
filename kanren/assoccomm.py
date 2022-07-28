@@ -44,6 +44,7 @@ from .goals import itero, permuteo
 from .graph import term_walko
 from .term import term
 
+
 associative = Relation("associative")
 commutative = Relation("commutative")
 

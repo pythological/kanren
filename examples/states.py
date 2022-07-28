@@ -8,6 +8,7 @@ The `coastal` relation expresses which states border the ocean.
 """
 from kanren import Relation, fact, run, var
 
+
 adjacent = Relation()
 coastal = Relation()
 

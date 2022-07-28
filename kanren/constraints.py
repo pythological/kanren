@@ -2,6 +2,7 @@ import weakref
 from abc import ABC, abstractmethod
 from collections import UserDict
 from collections.abc import Mapping
+from typing import Optional
 
 from cons.core import ConsPair
 from toolz import groupby
@@ -26,7 +27,7 @@ class ConstraintStore(ABC):
     """
 
     __slots__ = ("lvar_constraints",)
-    op_str = None
+    op_str: Optional[str] = None
 
     def __init__(self, lvar_constraints=None):
         # self.lvar_constraints = weakref.WeakKeyDictionary(lvar_constraints)
