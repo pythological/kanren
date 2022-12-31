@@ -35,7 +35,7 @@ def tailo(tail, coll):
 
 
 def conso(h, t, r):
-    """Construct a goal stating that cons h + t == l."""
+    """Construct a goal stating that cons h + t == r."""
     return eq(cons(h, t), r)
 
 
