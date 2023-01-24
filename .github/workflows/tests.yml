@@ -22,7 +22,7 @@ jobs:
     outputs:
       changes: ${{ steps.changes.outputs.src }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           fetch-depth: 0
       - uses: dorny/paths-filter@v2
@@ -47,10 +47,10 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ needs.changes.outputs.changes == 'true' }}
     steps:
-    - uses: actions/checkout@v2
-    - uses: actions/setup-python@v2
+    - uses: actions/checkout@v3
+    - uses: actions/setup-python@v4
       with:
-        python-version: 3.8
+        python-version: "3.8"
     - uses: pre-commit/action@v2.0.0
 
   test:
@@ -62,14 +62,14 @@ jobs:
     strategy:
       matrix:
         python-version:
-          - 3.7
-          - 3.8
-          - 3.9
-          - '3.10'
-          - pypy3
+          - "3.7"
+          - "3.8"
+          - "3.9"
+          - "3.10"
+          - "pypy3.9"
     steps:
-    - uses: actions/checkout@v2
-    - uses: actions/setup-python@v2
+    - uses: actions/checkout@v3
+    - uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies
