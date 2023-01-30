@@ -67,7 +67,7 @@ class Relation(object):
 
             for fact in facts:
                 unified = unify(fact, args2, substitution)
-                if unified != False:
+                if unified is not False:
                     yield merge(unified, substitution)
 
         return goal
