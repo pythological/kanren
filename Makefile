@@ -1,7 +1,7 @@
 .PHONY: help venv conda docker docstyle format style black test lint check coverage pypi
 .DEFAULT_GOAL = help
 
-PYTHON = python
+PYTHON = python3
 PIP = pip
 CONDA = conda
 SHELL = bash
@@ -30,7 +30,6 @@ venv:  # Set up a Python virtual environment for development.
 	source kanren-venv/bin/activate; \
 	${PIP} install -U pip; \
 	${PIP} install -r requirements.txt; \
-	${PIP} install -r requirements-dev.txt; \
 	deactivate; \
 	)
 	@printf "\n\nVirtual environment created! \033[1;34mRun \`source kanren-venv/bin/activate\` to activate it.\033[0m\n\n\n"
@@ -63,11 +62,18 @@ test:  # Test code using pytest.
 coverage: test
 	diff-cover coverage.xml --compare-branch=main --fail-under=100
 
-pypi:
-	${PYTHON} setup.py clean --all; \
-	${PYTHON} setup.py rotate --match=.tar.gz,.whl,.egg,.zip --keep=0; \
-	${PYTHON} setup.py sdist bdist_wheel; \
-  twine upload --skip-existing dist/*;
+build-distribution:
+	${PYTHON} -m venv .venv
+	./.venv/bin/pip install --upgrade pip
+	./.venv/bin/pip install build
+	./.venv/bin/python -m build .
+	@echo "Built packages are in dist/"
+
+pypi: build-distribution
+	${PYTHON} -m venv .venv
+	./.venv/bin/pip install --upgrade pip
+	./.venv/bin/pip install twine
+	twine upload --skip-existing dist/*;
 
 lint: docstyle format style  # Lint code using pydocstyle, black and pylint.
 

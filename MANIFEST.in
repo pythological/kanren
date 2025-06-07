@@ -1,2 +1,28 @@
-include versioneer.py
-include kanren/_version.py
+include LICENSE.txt
+include pyproject.toml
+include README.md
+include setup.cfg
+
+graft kanren
+
+prune .github
+prune doc
+prune examples  
+prune tests
+prune *egg-info
+prune *_cache
+
+exclude .gitattributes
+exclude .gitignore
+exclude .pre-commit-config.yaml
+exclude .pylintrc
+exclude Makefile
+exclude pytest.ini
+exclude release-notes
+exclude requirements.txt
+exclude tox.ini
+exclude *venv*
+
+global-exclude *.pyc
+global-exclude .DS_Store
+global-exclude __pycache__

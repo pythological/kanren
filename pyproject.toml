@@ -1,0 +1,61 @@
+[build-system]
+requires = [
+    "setuptools==80.9.0",  # pinning at current latest. Update as needed
+    "setuptools-scm[toml]==8.3.1",  # used to pull version from git tag; pinned at current latest
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "miniKanren"
+dynamic = ['version']
+requires-python = ">=3.6"
+authors = [{ name = "Brandon T. Willard", email = "brandonwillard+kanren@gmail.com" }]
+description = "Relational programming in Python"
+readme = "README.md"
+license-files = ["LICENSE.txt"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+]
+
+dependencies = [
+    "cons >= 0.4.0",
+    "etuples >= 0.3.1",
+    "logical-unification >= 0.4.1",
+    "multipledispatch",
+    "toolz",
+    "typing_extensions",
+]
+
+[project.urls]
+repository = "http://github.com/pythological/kanren"
+
+[dependency-groups]
+test = [
+    "pytest",
+    "sympy",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["kanren*"]
+exclude = ["doc*", "examples*", "tests*"]
+
+[tool.setuptools.package-data]
+kanran = ["py.typed"]
+
+[tool.setuptools_scm]
+version_scheme = "guess-next-dev"
+local_scheme = "dirty-tag"
