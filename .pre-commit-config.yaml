@@ -21,24 +21,23 @@ repos:
       - id: black
         language_version: python3
   - repo: https://github.com/pycqa/flake8
-    # NOTE: flake8 v6 requires python >=3.8.1 but
-    # Aesara still supports python 3.7.
-    rev: 3.8.4
+    rev: 7.0.0
     hooks:
       - id: flake8
+        args: ['--ignore=E721,E712,E501']
   - repo: https://github.com/pycqa/isort
-    rev: 5.11.4
+    rev: 5.13.2
     hooks:
       - id: isort
-  - repo: https://github.com/humitos/mirrors-autoflake.git
-    rev: v1.1
+  - repo: https://github.com/PyCQA/autoflake
+    rev: v2.3.0
     hooks:
       - id: autoflake
         exclude: |
           (?x)^(
               .*/?__init__\.py|
           )$
-        args: ['--in-place', '--remove-all-unused-imports', '--remove-unused-variable']
+        args: ['--in-place', '--remove-all-unused-imports', '--remove-unused-variables']
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v0.991
     hooks:

@@ -54,7 +54,7 @@ include = ["kanren*"]
 exclude = ["doc*", "examples*", "tests*"]
 
 [tool.setuptools.package-data]
-kanran = ["py.typed"]
+kanren = ["py.typed"]
 
 [tool.setuptools_scm]
 version_scheme = "guess-next-dev"
