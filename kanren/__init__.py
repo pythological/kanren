@@ -20,4 +20,5 @@ from .goals import (
 )
 from .term import arguments, operator, term, unifiable_with_term
 
+
 __version__ = version("miniKanren")
