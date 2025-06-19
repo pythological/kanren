@@ -29,7 +29,8 @@ jobs:
           python-version: "3.8"
       - name: Build the sdist
         run: |
-          python setup.py sdist
+          pip install build
+          python -m build --sdist
       - name: Check the sdist installs and imports
         run: |
           mkdir -p test-sdist
