@@ -31,7 +31,6 @@ dependencies = [
     "etuples >= 0.3.1",
     "logical-unification >= 0.4.1",
     "toolz",
-    "typing_extensions",
 ]
 
 [project.urls]
