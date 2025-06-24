@@ -31,7 +31,6 @@ dependencies = [
     "logical-unification >= 0.4.1",
     "multipledispatch",
     "toolz",
-    "typing_extensions",
 ]
 
 [project.urls]
