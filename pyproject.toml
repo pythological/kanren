@@ -30,7 +30,6 @@ dependencies = [
     "cons >= 0.4.0",
     "etuples >= 0.3.1",
     "logical-unification >= 0.4.1",
-    "multipledispatch",
     "toolz",
     "typing_extensions",
 ]
