@@ -149,7 +149,7 @@ We can express the grandfather relationship as a distinct relation by creating a
 
 ## Extending `kanren`
 
-`kanren` uses [`multipledispatch`](http://github.com/mrocklin/multipledispatch/) and the [`logical-unification` library](https://github.com/pythological/unification) to support pattern matching on user defined types.  Essentially, types that can be unified can be used with most `kanren` goals.  See the [`logical-unification` project's examples](https://github.com/pythological/unification#examples) for demonstrations of how arbitrary types can be made unifiable.
+`kanren` uses the [`logical-unification` library](https://github.com/pythological/unification) to support pattern matching on user defined types.  Essentially, types that can be unified can be used with most `kanren` goals.  See the [`logical-unification` project's examples](https://github.com/pythological/unification#examples) for demonstrations of how arbitrary types can be made unifiable.
 
 ## About
 
