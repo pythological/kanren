@@ -7,6 +7,7 @@ from typing import (
     Callable,
     Iterable,
     Iterator,
+    Literal,
     MutableMapping,
     Optional,
     Tuple,
@@ -16,7 +17,6 @@ from typing import (
 
 from cons.core import ConsPair
 from toolz import interleave, take
-from typing_extensions import Literal
 from unification import isvar, reify, unify
 from unification.core import isground
 
