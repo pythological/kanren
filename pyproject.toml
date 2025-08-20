@@ -9,6 +9,7 @@ requires-python = ">=3.9"
 authors = [{ name = "Brandon T. Willard", email = "brandonwillard+kanren@gmail.com" }]
 description = "Relational programming in Python"
 readme = "README.md"
+license = "BSD-3-Clause"
 license-files = ["LICENSE.txt"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
