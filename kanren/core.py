@@ -193,6 +193,8 @@ def Zzz(gctor: Callable[[Any], GoalType], *args, **kwargs) -> GoalType:
 
     return Zzz_goal
 
+delay = snooze = Zzz
+
 
 def run(
     n: Union[None, int],
